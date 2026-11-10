@@ -218,11 +218,27 @@ function killWorm(w,cause){
 }
 function reapWorms(dt){
   if(G.worms.some(w=>w.dead)){G.worms=G.worms.filter(w=>!w.dead);assignShifts();if(selWorm&&!G.worms.some(w=>w.id===selWorm)){selWorm=0;}}
-  // tyhjään taloon muuttaa uusia matoja
-  if(!G.worms.length){G.emptyT=(G.emptyT||0)+dt;
-    if(G.emptyT>12){G.emptyT=0;let spot=null;for(let r=1;r<ROWS&&!spot;r++)for(let c=0;c<COLS;c++)if(walk(r,c)&&G.grid[r][c].t!=='shaft'){spot=[r,c];break;}
-      if(spot){for(let i=0;i<2;i++){const w=spawnWorm(spot[0],spot[1],false);w.age=BABY_AGE+w.life*.1*i;think(w,'👋',3);}showBanner('🪱 Kaksi uutta matoa muutti tyhjään matotaloon!','good',7);}}}
+  G.maxWorms=Math.max(G.maxWorms||0,G.worms.length);
+  // kun viimeinenkin mato on kuollut, peli päättyy
+  if(!G.worms.length&&!G.over){G.emptyT=(G.emptyT||0)+dt;if(G.emptyT>3.5){G.over=true;save();gameOver();}}
   else G.emptyT=0;
+}
+function startNewGame(){newGame();leaves=[];bird=null;mole=null;rain=[];ghosts=[];dirty=true;camInit=false;viewW=0;resize();hideBanner();document.getElementById('overlay').style.display='none';paused=false;save();}
+function gameOver(){
+  paused=true;hideBanner();
+  const days=Math.floor(G.time/DAY)+1,yr=Math.floor(G.time/SLEN/4)+1,se=SEASONS[seasonI()];
+  document.getElementById('card').innerHTML=`<h1>🕊️ Matotalo hiljeni</h1>
+  <p>Viimeinenkin mato on poissa, ja peli päättyi.</p>
+  <ul>
+  <li>📅 Talo oli asuttu <b>${days===1?'yhden päivän':days+' päivää'}</b> (vuosi ${yr}, ${se.ic} ${se.name.toLowerCase()}).</li>
+  <li>🪱 Enimmillään talossa asui <b>${G.maxWorms||0} matoa</b>.</li>
+  <li>🍼 Vauvoja syntyi <b>${G.born||0}</b>.</li>
+  <li>🏠 Huoneita rakennettiin <b>${G.rooms.length}</b>.</li>
+  </ul>
+  <button class="big" id="bNew2">Uusi peli</button><button class="small" id="bLook">Katsele tyhjää taloa</button>`;
+  document.getElementById('overlay').style.display='flex';
+  document.getElementById('bNew2').onclick=startNewGame;
+  document.getElementById('bLook').onclick=()=>{document.getElementById('overlay').style.display='none';paused=false;};
 }
 function resetTrail(w){w.trail=[];for(let i=0;i<20;i++)w.trail.push({x:w.x-i*.04*(w.dir||1),y:w.y});}
 
@@ -736,7 +752,7 @@ function updateWorld(dt){
   const nl=countRooms('lasten');
   const avg=G.worms.reduce((s,w)=>s+avgNeeds(w),0)/Math.max(1,G.worms.length);
   if(nl>0&&avg>55&&G.worms.length<Math.min(18,4+3*nl)){G.babyTimer+=dt;if(G.babyTimer>32){G.babyTimer=0;
-    const rm=G.rooms.filter(r=>r.type==='lasten')[Math.floor(rnd()*nl)];const w=spawnWorm(rm.r,rm.c+1,true);w.x=rm.c+1;think(w,'🍼',3);
+    G.born=(G.born||0)+1;const rm=G.rooms.filter(r=>r.type==='lasten')[Math.floor(rnd()*nl)];const w=spawnWorm(rm.r,rm.c+1,true);w.x=rm.c+1;think(w,'🍼',3);
     showBanner('🍼 Lastenhuoneeseen syntyi vauvamato!','good',4);}}
   if(leaves.some(l=>l.landed)&&!countRooms('keittio'))toastOnce('nokitchen','Lehdet odottavat pinnalla 🍃 – madot vievät ne keittiöön, kun sellainen on.');
   // partikkelit
@@ -1654,7 +1670,7 @@ function help(first){
   <li>🌱🌻🍂❄️ <b>Vuodenajat</b> vaihtuvat kahden päivän välein. Keväällä sataa, kesällä on kuivaa, ja syksyllä lehtiä putoaa paljon – kerää silloin ruokaa varastoon.</li>
   <li>❄️ Talvella madot pysyvät kotona ja elävät varastoilla. <b>Pakkanen</b> hiipii pinnalta maahan, ja madot palelevat pakkasrajan yläpuolella: kaiva syvemmälle tai rakenna <b>takkahuone</b> 🔥.</li>
   <li>⛏️ Talvi on kaivamisen aikaa: kaivaminen on ilmaista ja mullasta löytyy <b>aarteita</b>. Napauta pinnan <b>lumikasoja</b>, niin saat vettä 💧.</li>
-  <li>💀 <b>Madot voivat kuolla.</b> Rastas tai myyrä voi napata heikon madon. Mato kuolee myös, jos se on liian kauan ilman ruokaa tai kylmässä – 🆘 varoittaa ajoissa.</li>
+  <li>💀 <b>Madot voivat kuolla.</b> Rastas tai myyrä voi napata heikon madon. Mato kuolee myös, jos se on liian kauan ilman ruokaa tai kylmässä – 🆘 varoittaa ajoissa. Jos kaikki madot kuolevat, peli päättyy.</li>
   <li>👵 Madot <b>vanhenevat</b>: vanhus muuttuu harmaaksi ja hitaaksi ja nukkuu lopulta pois. Pidä huolta, että lastenhuoneessa kasvaa uusia matoja. Madon iän näet napauttamalla sitä.</li>
   <li>🟫 Multaa mahtuu varastoon 150, ja jokainen ruokakomero tuo 100 lisää.</li>
   <li>🍼 Tyytyväiset madot saavat vauvoja <b>lastenhuoneessa</b>. 🌱 Mitä enemmän multaa, sitä isommaksi kasvi kasvaa – saatko sen kukkimaan?</li>
@@ -1662,7 +1678,7 @@ function help(first){
   <button class="big" id="bGo">${first?'Aloitetaan!':'Jatka'}</button>${first?'':'<button class="small" id="bNew">Uusi peli</button>'}`;
   document.getElementById('overlay').style.display='flex';
   document.getElementById('bGo').onclick=()=>{document.getElementById('overlay').style.display='none';paused=false;try{localStorage.setItem(KEY+'-seen','1')}catch(e){}};
-  const nb=document.getElementById('bNew');if(nb)nb.onclick=()=>{nb.textContent='Varmasti? Napauta uudelleen';nb.onclick=()=>{newGame();leaves=[];bird=null;mole=null;rain=[];dirty=true;camInit=false;viewW=0;resize();hideBanner();document.getElementById('overlay').style.display='none';paused=false;save();};};
+  const nb=document.getElementById('bNew');if(nb)nb.onclick=()=>{nb.textContent='Varmasti? Napauta uudelleen';nb.onclick=startNewGame;};
 }
 document.getElementById('bHelp').onclick=()=>help(false);
 document.getElementById('bSpeed').onclick=()=>{
@@ -1717,7 +1733,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)save();});
 if(!load())newGame();
 buildTools();toolInfo();resize();
 let seen=false;try{seen=!!localStorage.getItem(KEY+'-seen')}catch(e){}
-if(!seen)help(true);
+if(!seen)help(true);else if(G.over)gameOver();
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{dirty=true;});
 requestAnimationFrame(frame);
 window.__bfs=bfs;window.__mt={killWorm,multaCap,get fmat(){return fmat},hasFloor,ladderAt,seasonI,frostDepth,coldAt,SLEN,get cam(){return{camX,camY,S,S0,zoom,viewW,viewH}},get bird(){return bird},lookAt,setZoom,get mole(){return mole},get G(){return G},get lift(){return lift},get leaves(){return leaves},step,tap,startEvent,activateEvent,set tool(v){tool=v}};
