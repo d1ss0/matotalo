@@ -1,0 +1,8 @@
+services:
+  matotalo:
+    build: .
+    image: matotalo:latest
+    container_name: matotalo
+    restart: unless-stopped
+    # Portit ja verkot määritellään omassa tiedostossa docker-compose.override.yml,
+    # jota ei viedä repoon. Katso README.

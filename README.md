@@ -14,6 +14,26 @@ Avaa `index.html` selaimessa tai tarjoile se millä tahansa staattisella web-pal
 python3 -m http.server 8080
 ```
 
+## Docker
+
+```
+git pull
+docker compose up -d --build
+```
+
+Portit ja verkot kuuluvat omaan tiedostoosi `docker-compose.override.yml`, jota ei viedä repoon.
+Docker Compose yhdistää sen automaattisesti. Esimerkiksi portin julkaisu:
+
+```
+services:
+  matotalo:
+    ports:
+      - "8080:80"
+```
+
+Tabletilla: avaa osoite selaimessa ja valitse "Lisää Koti-valikkoon", niin peli
+aukeaa omasta kuvakkeestaan koko näytöllä.
+
 ## Sisältö tällä hetkellä
 
 - 21 ruudun levyinen puutarha, vapaa kamera (veto, nipistys, 🔍, 🏠)
