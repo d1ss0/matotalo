@@ -36,14 +36,16 @@ aukeaa omasta kuvakkeestaan koko näytöllä.
 
 ## Sisältö tällä hetkellä
 
-- 21 ruudun levyinen puutarha, vapaa kamera (veto, nipistys, 🔍, 🏠)
+- 21 ruudun levyinen metsä, josta putoaa lehtiä, vapaa kamera (veto, nipistys, 🔍, 🏠)
 - Vuorokausi ja valaistus, neljä vuodenaikaa (2 pelipäivää / vuodenaika)
 - Tapahtumat: sade, kuivuus, rastas, myyrä
 - Huoneet: keittiö, ruokakomero, makuuhuone, kylpyhuone, kellari, lastenhuone, lääkäri, olohuone, askarteluhuone, takkahuone, salainen huone
 - Talvi: pakkasraja, ilmainen kaivuu, aarteet, lumikasat
+- Isot huoneet avautuvat matomäärän mukaan: uloskäytävä (10), suurkeittiö ja makuusali (15), suurvarasto (20)
+- Ääniefektit WebAudiolla (ei äänitiedostoja), mykistys 🔊-napista
 
 ## Seuraavaksi
 
 - Yhdyskunnan kasvu ja virstanpylväät
 - Talvijuhla
-- Lisää petoja ja viimeistelyä (äänet, hiukkaset)
+- Lisää petoja ja viimeistelyä
