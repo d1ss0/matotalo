@@ -36,12 +36,14 @@ aukeaa omasta kuvakkeestaan koko näytöllä.
 
 ## Sisältö tällä hetkellä
 
-- 21 ruudun levyinen metsä, josta putoaa lehtiä, vapaa kamera (veto, nipistys, 🔍, 🏠)
+- 31 x 16 ruudun puutarha ja metsä, josta putoaa lehtiä, vapaa kamera (veto, nipistys, 🔍, 🏠)
 - Vuorokausi ja valaistus, neljä vuodenaikaa (2 pelipäivää / vuodenaika)
 - Tapahtumat: sade, kuivuus, rastas, myyrä
 - Huoneet: keittiö, ruokakomero, makuuhuone, kylpyhuone, kellari, lastenhuone, lääkäri, olohuone, askarteluhuone, takkahuone, salainen huone
 - Talvi: pakkasraja, ilmainen kaivuu, aarteet, lumikasat
-- Isot huoneet avautuvat matomäärän mukaan: uloskäytävä (10), suurkeittiö ja makuusali (15), suurvarasto (20)
+- Peli alkaa pinnalta: madot saapuvat, ja opastus neuvoo askel kerrallaan (portaat, käytävä, keittiö, makuuhuone, lehti, kaivo, kellari ja kylpyhuone)
+- Sadevesi: sade täyttää pelaajan kaivamat kaivot, ja kellari nostaa veden niistä varastoon
+- Isot rakennukset avautuvat matomäärän mukaan: hissi (8), suurkeittiö ja makuusali (15), suurvarasto (20)
 - Ääniefektit WebAudiolla (ei äänitiedostoja), mykistys 🔊-napista
 
 ## Seuraavaksi
