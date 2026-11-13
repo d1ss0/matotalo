@@ -42,6 +42,7 @@ aukeaa omasta kuvakkeestaan koko näytöllä.
 - Huoneet: keittiö, ruokakomero, makuuhuone, kylpyhuone, kellari, lastenhuone, lääkäri, olohuone, askarteluhuone, takkahuone, salainen huone
 - Talvi: pakkasraja, ilmainen kaivuu, aarteet, lumikasat
 - Peli alkaa pinnalta: madot saapuvat, ja opastus neuvoo askel kerrallaan (portaat, käytävä, keittiö, makuuhuone, lehti, kaivo, kellari ja kylpyhuone)
+- Tikkaat rakennetaan itse kerrosten väliin (Tikkaat-työkalu); vuoroja ei ole, madot nukkuvat yleensä yöllä
 - Sadevesi: sade täyttää pelaajan kaivamat kaivot, ja kaivoissa oleva fyysinen vesi on vesivarasto
 - Isot rakennukset avautuvat matomäärän mukaan: hissi (8), suurkeittiö ja makuusali (15), suurvarasto (20)
 - Ääniefektit WebAudiolla (ei äänitiedostoja), mykistys 🔊-napista
