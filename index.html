@@ -202,7 +202,7 @@ const SEASONS=[
   {id:'kevat',name:'Kevät',ic:'🌱',dl:125,leaf:1,ev:['sade','sade','sade','rastas','myyra'],msg:'🌱 Kevät tuli! Lumi sulaa ja sataa paljon – kaivot täyttyvät.'},
   {id:'kesa',name:'Kesä',ic:'🌻',dl:142,leaf:1.1,ev:['kuivuus','kuivuus','rastas','rastas','myyra','sade'],msg:'🌻 Kesä! Päivät ovat pitkiä, mutta kuivuus vaanii – pidä vesivarasto täynnä.'},
   {id:'syksy',name:'Syksy',ic:'🍂',dl:118,leaf:3,ev:['sade','sade','sade','rastas','myyra'],msg:'🍂 Syksy! Sataa usein ja lehtiä putoaa isoina kasoina – kaivot täyttyvät, joten täytä myös ruokakomero 🧺 talven varalle.'},
-  {id:'talvi',name:'Talvi',ic:'❄️',dl:100,leaf:.25,ev:['myyra'],msg:'❄️ Talvi! Madot pysyvät kotona pakkasrajan alla. Mullasta löytyy nyt kaivaessa tavallista useammin aarteita, ja lumikasoista saa vettä napauttamalla.'}];
+  {id:'talvi',name:'Talvi',ic:'❄️',dl:100,leaf:.25,ev:['myyra','suoja','suoja'],msg:'❄️ Talvi! Madot pysyvät kotona pakkasrajan alla.'}];
 const PALS=[
   {far:[150,220,120],near:[104,196,84],grass:[98,200,66],b1:[120,216,84],b2:[84,180,56],out:[42,106,26],leaf:[110,208,72],fl:[1,0,0]},
   {far:[143,212,106],near:[98,184,71],grass:[92,191,58],b1:[111,209,74],b2:[79,174,49],out:[42,106,26],leaf:[98,200,67],fl:[.45,0,0]},
@@ -682,13 +682,14 @@ function moveToward(w,tx,ty,step){
 const EVTXT={
   sade:{warn:'☁️ Pilviä kerääntyy… rankkasade tulossa!',act:'🌧️ Rankkasade! Sade täyttää kaivot.',dur:20,cls:'',short:'🌧️ Sataa'},
   kuivuus:{warn:'☀️ Aurinko alkaa paahtaa… kuiva kausi tulossa!',act:'🌵 Kuivuus! Madot kuivuvat. Kylpyhuone ja vesivarasto auttavat, metsän varjo vähän.',dur:28,cls:'',short:'🌵 Kuivuus'},
+  suoja:{warn:'🌤️ Sää lauhtuu… suojasää tulossa.',act:'💧 Suojasää! Lumi sulaa, ja sulamisvesi valuu kaivoihin.',dur:22,cls:'',short:'💧 Lumi sulaa'},
   rastas:{warn:'🐦 Rastas laskeutuu nurmikolle!',act:'🐦 Rastas vaanii nurmikolla! Lehtien haku on tauolla – maan alla madot ovat turvassa. Napauta lintua ajaaksesi sen pois.',dur:18,cls:'danger',short:'🐦 Rastas! Napauta sitä'},
   myyra:{warn:'🐾 Maa tärisee… myyrä kaivautuu kohti!',act:'🐾 Myyrä tunneloi! Napauta myyrää neljästi ajaaksesi sen pois.',dur:24,cls:'danger',short:'🐾 Myyrä! Napauta sitä'},
 };
 function startEvent(){
   const late=isNight()||dayT()>DAYLIGHT-30;
   const fall=seasonI()===2; // syksyllä sataa usein: sade voi toistua peräkkäin ja tulla myös illalla ja yöllä
-  let opts=SEASONS[seasonI()].ev.filter(t=>(t!==G.lastEv||(fall&&t==='sade'))&&!(late&&(t==='kuivuus'||(t==='sade'&&!fall))));
+  let opts=SEASONS[seasonI()].ev.filter(t=>(t!==G.lastEv||(fall&&t==='sade'))&&!(late&&(t==='kuivuus'||t==='suoja'||(t==='sade'&&!fall)))&&!(t==='suoja'&&G.hardWinter));
   if(!opts.length)opts=seasonI()===3?['myyra']:['rastas','myyra'].filter(t=>t!==G.lastEv);
   let type=opts[Math.floor(rnd()*opts.length)];
   if(G.forceEv){type=G.forceEv;G.forceEv=null;}
@@ -724,7 +725,7 @@ function activateEvent(){
 function endEvent(){
   const t=G.ev.type;G.ev=null;G.nextEvent=(45+rnd()*30)*(seasonI()===3?1.5:seasonI()===2?.65:1);
   if(bird)bird.leave=true;if(mole)mole.leave=true;
-  showBanner({sade:'🌤️ Sade loppui.',kuivuus:'🌦️ Kuiva kausi päättyi.',rastas:'🐦 Rastas lensi pois.',myyra:'🐾 Myyrä kaivautui pois. Sen käytävät päästävät sadevettä sisään – paikkaa ne mullalla 🧱.'}[t],'good',t==='myyra'?6:4);
+  showBanner({suoja:'❄️ Pakkanen palasi.',sade:'🌤️ Sade loppui.',kuivuus:'🌦️ Kuiva kausi päättyi.',rastas:'🐦 Rastas lensi pois.',myyra:'🐾 Myyrä kaivautui pois. Sen käytävät päästävät sadevettä sisään – paikkaa ne mullalla 🧱.'}[t],'good',t==='myyra'?6:4);
 }
 function molePickGoal(m,forceRandom){
   const opts=[];const ws=G.worms.filter(w=>!['hide','ride','surface','waitLift'].includes(w.state));
@@ -782,6 +783,10 @@ function updateEvents(dt){
   else{G.ev.t-=dt;if(G.ev.t<=0){if(G.ev.phase==='warn')activateEvent();else endEvent();}}
   const ev=G.ev&&G.ev.phase==='active'?G.ev.type:'';
   // sade
+  // suojasää: lumi sulaa kaivoihin, noin puolet sateen määrästä
+  if(ev==='suoja'){G.wbuf=(G.wbuf||0)+1.7*dt*13*.5;
+    if(!wellCols().length)toastOnce('nowell','🌧️ Sataa, mutta vesi valuu hukkaan – kaiva 🕳️ Kaivo, niin sade täyttää sen.');
+    while(G.wbuf>=1){G.wbuf--;spawnRainWater();}}
   if(ev==='sade'){
     const inflow=1.7*dt;
     let leak=0;for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(G.grid[r][c].mole&&G.grid[r][c].t==='tun')leak++;
@@ -1679,7 +1684,7 @@ function checkUnlocks(){
 function toolInfo(){
   const t=TOOLS.find(x=>x.id===tool);
   if(tool==='katso')setInfo('<span class="t">👆 Valitse</span><br>Napauta matoa nähdäksesi, mitä se tekee ja tarvitsee. Napauta pinnalle pudonnutta lehteä 🍃, niin mato käy hakemassa sen.');
-  else if(tool==='kaiva')setInfo('<span class="t">⛏️ Kaiva</span> (1 🟫 / ruutu)<br>Napauta multaa käytävän vieressä. Kivet ovat liian kovia. Mullasta voi löytyä aarteita – varsinkin talvella!');
+  else if(tool==='kaiva')setInfo('<span class="t">⛏️ Kaiva</span> (1 🟫 / ruutu)<br>Napauta multaa käytävän vieressä. Kivet ovat liian kovia. Mullasta voi löytyä aarteita.');
   else if(tool==='tikkaat')setInfo('<span class="t">🪜 Tikkaat</span> ('+LADDER_COST+' 🟫)<br>Päällekkäisten käytävien ja huoneiden välissä on lattia. Napauta lattiaa kohdasta, johon haluat tikkaat – madot kulkevat kerrosten väliä vain tikkaita pitkin. Napauta tikkaita uudelleen, jos haluat purkaa ne.');
   else if(tool==='paikkaa')setInfo('<span class="t">🧱 Korjaa</span><br>Napauta käytävää täyttääksesi sen mullalla (1 🟫) – myyrän käytävät (oranssit reunat) päästävät sadevettä sisään. Napauta rikkinäistä huonetta korjataksesi sen.');
   else if(tool==='purku')setInfo('<span class="t">🧹 Pura</span><br>Napauta huonetta purkaaksesi sen. Saat puolet mullasta takaisin.');
@@ -1826,7 +1831,7 @@ function tap(px,py){
 }
 const ptrs=new Map();let drag=null,pinch=null;
 function digFind(r,c,win){
-  if(rnd()>(win?.4:.1))return;
+  if(rnd()>.1)return;
   sfx('sparkle');
   const x=c+.5,y=SKY+r+.35,k=rnd(),kit=kitchens().find(q=>!broken(q)&&q.food<=fcap(q)-2);
   for(let i=0;i<12;i++)parts.push({x,y:y+.15,vx:(rnd()-.5)*3,vy:-rnd()*3,t:.9,col:['#ffe066','#fff','#9be7ff'][i%3]});
@@ -1984,7 +1989,7 @@ function help(first){
   <li>🐦 Rastas nokkii pinnalla lehtiä hakevia matoja. 🐾 Myyrä tunneloi sivusta – rakenna <b>salainen huone</b> piiloksi! Napauta molempia ajaaksesi ne pois.</li>
   <li>🌱🌻🍂❄️ <b>Vuodenajat</b> vaihtuvat kahden päivän välein. Keväällä sataa, kesällä on kuivaa, ja syksyllä lehtiä putoaa paljon – kerää silloin ruokaa varastoon.</li>
   <li>❄️ Talvella madot pysyvät kotona ja elävät varastoilla. <b>Pakkanen</b> hiipii pinnalta maahan, ja madot palelevat pakkasrajan yläpuolella: kaiva syvemmälle tai rakenna <b>takkahuone</b> 🔥.</li>
-  <li>⛏️ Talvi on kaivamisen aikaa: mullasta löytyy tavallista useammin <b>aarteita</b>. Napauta pinnan <b>lumikasoja</b>, niin saat vettä 💧.</li>
+  <li>❄️ Talvella madot pysyvät kotona. Suojasäällä lumi sulaa kaivoihin, mutta ankarana talvena ei – kerää vettä talteen syksyn sateista. Napauta pinnan <b>lumikasoja</b>, niin saat vähän vettä 💧.</li>
   <li>🚽 Madot tarvitsevat <b>vessan</b>. Jos mato ei ehdi sinne, lattialle jää sotku 💩, joka vie lähellä olevilta madoilta iloa ja siisteyttä (kylpy auttaa). Sotku häviää aikanaan – tai heti, kun napautat sitä.</li>
   <li>💀 <b>Madot voivat kuolla.</b> Rastas tai myyrä voi napata heikon madon. Mato kuolee myös, jos se on liian kauan ilman ruokaa tai kylmässä – 🆘 varoittaa ajoissa. Jos kaikki madot kuolevat, peli päättyy.</li>
   <li>👵 Madot <b>vanhenevat</b>: vanhus muuttuu harmaaksi ja hitaaksi ja nukkuu lopulta pois. Pidä huolta, että lastenhuoneessa kasvaa uusia matoja. Madon iän näet napauttamalla sitä.</li>
@@ -2019,7 +2024,8 @@ function step(dt){
     else showBanner('☀️ Aamu! Madot heräävät.','good',4);}
   {const si=seasonI();DAYLIGHT=SEASONS[si].dl;
     if(G.season!==si){const first=G.season===undefined;G.season=si;
-      if(!first){showBanner(SEASONS[si].msg,'good',10);
+      if(!first){if(si===3)G.hardWinter=rnd()<.3;
+        showBanner(SEASONS[si].msg+(si===3?(G.hardWinter?' Tästä tulee ankara talvi: lumi ei sula, joten syksyllä kerätyn veden täytyy riittää.':' Suojasäällä lumi sulaa välillä kaivoihin.'):''),'good',10);
         if(si===3)for(const w of G.worms)if(w.state==='surface')w.sphase='back';
         if(si===0&&!G.ev){G.forceEv='sade';G.nextEvent=Math.min(G.nextEvent,10);}}}}
   SNOW=snowAmt();
