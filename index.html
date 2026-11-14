@@ -119,6 +119,7 @@ const COLS=31, ROWS=16, SKY=3, H=ROWS+SKY, CX=15, WK=COLS/9;
 let SHAFT=-9; // hissikuilun sarake; -9 = hissiä ei ole vielä rakennettu
 const INK='#2a2320';
 const WELL_COST=2,LIFT_COST=30,LADDER_COST=2;
+const GW_ROW=8,GW_RATE=.12; // pohjaveden pinta (kerros) ja tihkuminen: vesiruutua sekunnissa jokaista pinnan alla olevaa kaivoruutua kohti
 const ROOMS={
   keittio:{name:'Keittiö',ic:'🍲',cost:10,need:'ruoka',wall:'#f4d6a6',desc:'Madot tuovat lehdet tänne. Kokkimato tekee niistä ruokaa ja multaa, ja nälkäiset madot käyvät syömässä.'},
   komero:{name:'Ruokakomero',ic:'🧺',cost:12,need:null,wall:'#e6d3a8',desc:'Varasto lehdille (30 🍃) ja mullalle (+100 🟫). Keittiöön mahtuu vain 6 lehteä, joten kerää tänne lehtiä talven varalle – madot hakevat niitä täältä keittiöön.'},
@@ -132,7 +133,7 @@ const ROOMS={
   askartelu:{name:'Askarteluhuone',ic:'🎨',cost:18,need:'ilo',wall:'#ded0f4',desc:'Puuhaa ja paljon iloa, mutta ei lepoa. Askartelusta mato saa intoa ✨: se liikkuu ja kokkaa hetken aikaa nopeammin. Vauvamadot oppivat ja kasvavat askarrellessa nopeammin.'},
   takka:{name:'Takkahuone',ic:'🔥',cost:16,need:'ilo',wall:'#e8c9a0',desc:'Takkatuli pitää pakkasen loitolla lähihuoneista talvella. Madot viihtyvät sen ääressä.'},
   ulos:{name:'Portaat',ic:'🚪',cost:6,need:null,wall:'#d6e8bf',desc:'Tikkaat pinnalle. Madot kulkevat niitä pitkin kotiin ja hakemaan lehtiä. Rakennetaan ylimpään kerrokseen, heti nurmikaton alle – mieluiten puiden lähelle.',hint:'Napauta maata heti nurmen alta.'},
-  kaivo:{name:'Kaivo',ic:'🕳️',cost:WELL_COST,need:null,special:true,desc:'Aukko nurmikatossa, josta sade sataa sisään. Kaivossa oleva vesi on matojen vesivarasto. Syvennä kaivoa ⛏️ Kaiva-työkalulla suoraan sen alta – syvempään mahtuu enemmän. Madot eivät kulje kaivossa, ja jos sen viereen kaivaa käytävän, vesi valuu sisään!',hint:'Napauta maata heti nurmen alta. Syvennä sitten ⛏️ Kaiva-työkalulla kaivon alta.'},
+  kaivo:{name:'Kaivo',ic:'🕳️',cost:WELL_COST,need:null,special:true,desc:'Aukko nurmikatossa, josta sade sataa sisään. Kaivossa oleva vesi on matojen vesivarasto. Syvennä kaivoa ⛏️ Kaiva-työkalulla suoraan sen alta – syvempään mahtuu enemmän, ja tarpeeksi syvälle kaivettuna pohjalle tihkuu hitaasti pohjavettä. Madot eivät kulje kaivossa, ja jos sen viereen kaivaa käytävän, vesi valuu sisään!',hint:'Napauta maata heti nurmen alta. Syvennä sitten ⛏️ Kaiva-työkalulla kaivon alta.'},
   hissi:{name:'Hissi',ic:'🛗',cost:LIFT_COST,need:null,special:true,desc:'Hissi kulkee pinnalta talon pohjalle asti ja kuljettaa neljä matoa kerrallaan. Tarvitsee vapaan pystylinjan: tiellä ei saa olla huonetta eikä kaivoa.',hint:'Napauta saraketta, johon hissikuilu rakennetaan.'},
   suurkeittio:{name:'Suurkeittiö',ic:'🍳',cost:30,need:'ruoka',wall:'#f7c98a',desc:'Iso keittiö: 16 lehteä ja 40 ruoka-annosta, ja kokki tekee ruokaa kaksi kertaa nopeammin. Viisi matoa mahtuu syömään yhtä aikaa.'},
   makuusali:{name:'Makuusali',ic:'🛌',cost:20,need:'lepo',wall:'#bccbee',desc:'Iso makuuhuone: kahdeksan sänkypaikkaa.'},
@@ -827,6 +828,12 @@ function updateEvents(dt){
   else{G.ev.t-=dt;if(G.ev.t<=0){if(G.ev.phase==='warn')activateEvent();else endEvent();}}
   const ev=G.ev&&G.ev.phase==='active'?G.ev.type:'';
   // sade
+  // pohjavesi: syvän kaivon pohjalle tihkuu hitaasti vettä, enintään pohjaveden pinnan tasolle. Kuivuudella pinta laskee eikä vettä tule.
+  if(ev!=='kuivuus'){const ws=wellCols().map(c=>[c,wellDepth(c)]).filter(q=>q[1]>GW_ROW);
+    if(ws.length){G.gwbuf=(G.gwbuf||0)+dt*GW_RATE*ws.reduce((a,q)=>a+q[1]-GW_ROW,0);
+      while(G.gwbuf>=1){G.gwbuf--;const [c,d]=ws[Math.floor(rnd()*ws.length)],x=c*FD+Math.floor(rnd()*FD);
+        let y=(SKY+d)*FD-1;while(y>=(SKY+GW_ROW)*FD&&fmat[y*FW+x]!==F_EMPTY)y--;
+        if(y>=(SKY+GW_ROW)*FD){fmat[y*FW+x]=F_WATER;if(rnd()<.25)parts.push({x:(x+.5)/FD,y:(y+.5)/FD,vx:(rnd()-.5)*.3,vy:-.5,t:.5,col:'#bfe3ff'});}}}}
   // suojasää: lumi sulaa kaivoihin, noin puolet sateen määrästä
   if(ev==='suoja'){G.wbuf=(G.wbuf||0)+1.7*dt*13*.5;
     if(!wellCols().length)toastOnce('nowell','🌧️ Sataa, mutta vesi valuu hukkaan – kaiva 🕳️ Kaivo, niin sade täyttää sen.');
@@ -1003,7 +1010,7 @@ function stepCA(){
         for(const dd of [d,-d]){const nx=x+dd;if(nx<0||nx>=FW)continue;if(fmat[bl+dd]===F_EMPTY){fswap(k,bl+dd);moved=true;break;}}
         if(moved)continue;
         for(const dd of [d,-d]){let st=1,last=-1;while(st<=3){const nx=x+dd*st;if(nx<0||nx>=FW||fmat[row+nx]!==F_EMPTY)break;last=row+nx;st++;}if(last>=0){fswap(k,last);moved=true;break;}}
-        if(rnd()<absorb*(gr>=0&&G.grid[gr][Math.floor(x/FD)].t==='well'?(dry?.5:.6):4)){for(const q of [k-1,k+1,bl]){if(q>=0&&q<fmat.length&&fmat[q]===F_SOIL&&rnd()<.25){fmat[k]=F_EMPTY;break;}}}
+        if(rnd()<absorb*(gr>=0&&G.grid[gr][Math.floor(x/FD)].t==='well'?(dry?.5:gr>=GW_ROW?0:.6):4)){for(const q of [k-1,k+1,bl]){if(q>=0&&q<fmat.length&&fmat[q]===F_SOIL&&rnd()<.25){fmat[k]=F_EMPTY;break;}}}
       }}}
   syncWater();
 }
@@ -1663,6 +1670,12 @@ function drawLeafItem(l){
   if(l.landed&&(l.prio||!l.claim)){ctx.globalAlpha=a*(l.prio?.9:.35)*(.5+.5*Math.sin(T*4));ctx.beginPath();ctx.arc(0,0,.28,0,7);ink(l.prio?.035:.02,l.prio?'#ffe27a':'#fff');ctx.stroke();}
   ctx.restore();
 }
+function drawWaterTable(){
+  if(tool!=='kaivo'&&tool!=='kaiva')return;
+  const y=SKY+GW_ROW;ctx.save();ctx.strokeStyle='rgba(120,190,255,.75)';ctx.lineWidth=.035;ctx.setLineDash([.18,.14]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(COLS,y);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(80,150,230,.07)';ctx.fillRect(0,y,COLS,ROWS-GW_ROW);
+  ctx.font=`.2px 'Patrick Hand',cursive`;ctx.textAlign='left';ctx.fillStyle='rgba(190,225,255,.95)';
+  for(let x=camX/S+.3;x<COLS;x+=9)ctx.fillText('💧 pohjavesi',x,y+.24);ctx.restore();}
 function drawPreview(){
   if(tool==='katso'||tool==='purku')return;
   ctx.save();ctx.setLineDash([.08,.08]);ink(.03,'rgba(255,240,180,.55)');
@@ -1698,6 +1711,7 @@ function render(){
   drawFrost();
   drawSurface();
   drawPiles();
+  drawWaterTable();
   drawPreview();
   if(G.mess)for(const q of G.mess){const a=q.t>75?(90-q.t)/15:1,x=q.x,y=q.y;ctx.globalAlpha=a;
     for(const [oy,rx,ry] of [[-.035,.1,.042],[-.095,.072,.038],[-.148,.042,.032]]){ctx.beginPath();ctx.ellipse(x,y+oy,rx,ry,0,0,7);ctx.fillStyle='#8a5526';ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=.02;ctx.stroke();}
@@ -1817,7 +1831,7 @@ function tap(px,py){
     if(inB(r,c)&&G.grid[r][c].room){const rm=roomById(G.grid[r][c].room),d=ROOMS[rm.type];const cook=rm.cook&&G.worms.find(o=>o.id===rm.cook);
     toast(`<span class="t">${d.ic} ${d.name}</span><br>${d.desc}${rm.dmg>0?`<br>💥 Vaurioita ${Math.round(rm.dmg)} %${broken(rm)?' – rikki, ei toimi!':''} Korjaus ${Math.ceil(rm.dmg/10)} 🟫 (🧱 Korjaa).`:''}${isBedT(rm.type)?`<br>🛏️ Tilaa ${bedCap(rm)} madolle.`:rm.type==='salainen'?'<br>🗝️ Tilaa 4 madolle.':''}${isStore(rm.type)?`<br>🍃 ${rm.leaves}/${pcap(rm)} lehteä varastossa · multavarasto ${Math.floor(G.multa)}/${multaCap()} 🟫`:''}${isKit(rm.type)?`<br>🍃 ${rm.leaves}/${kcap(rm)} lehteä · 🍲 ${rm.food}/${fcap(rm)} annosta · kokki: ${cook?cook.name:'ei ketään'}`:''}`);}
     else if(inB(r,c)&&G.grid[r][c].t==='shaft')toast('<span class="t">🛗 Hissi</span><br>Madot kulkevat hississä kerroksesta toiseen ja pinnalle hakemaan lehtiä, neljä kerrallaan. Isossa talossa hissi ruuhkautuu – rakenna lisää 🚪 portaita puiden lähelle.');
-    else if(wellAt(r,c)){const wl=wellLevel();toast(`<span class="t">🕳️ Kaivo</span><br>Sade täyttää kaivon, ja madot käyttävät vettä suoraan sieltä. Vesi vähenee hitaasti itsestään ja nopeammin kuivuudella. Vettä on nyt ${Math.floor(G.vesi)} / ${waterCap()} 💧.`);}
+    else if(wellAt(r,c)){const wl=wellLevel();toast(`<span class="t">🕳️ Kaivo</span><br>Sade täyttää kaivon, ja madot käyttävät vettä suoraan sieltä. Vesi vähenee hitaasti itsestään ja nopeammin kuivuudella. ${wellDepth(c)>GW_ROW?'Tämä kaivo yltää pohjaveteen, joten sen pohjalle tihkuu vettä ilman sadettakin.':'Jos kaivat kaivon '+(GW_ROW+1)+' ruudun syvyiseksi, se yltää pohjaveteen.'} Vettä on nyt ${Math.floor(G.vesi)} / ${waterCap()} 💧.`);}
     else toolInfo();
     return;}
   if(!inB(r,c))return;
@@ -1832,6 +1846,7 @@ function tap(px,py){
       G.multa-=1;sfx('dig');cell.t='well';cell.mole=false;dirty=true;shakeT=.3;
       for(let i=0;i<8;i++)parts.push({x:c+.5,y:SKY+r+.5,vx:(rnd()-.5)*3,vy:-rnd()*2.5,t:.6,col:'#8b5d3b'});
       if(walk(r,c-1)||walk(r,c+1))toast('💦 Kaivo ulottuu nyt käytävän viereen – vesi pääsee valumaan käytävään! 🧱 Korjaa-työkalulla saat kaivon pohjaa täytettyä.');
+      else if(r===GW_ROW)toast('<span class="t">💧 Kaivo ylsi pohjaveteen!</span><br>Pohjalle tihkuu nyt hitaasti vettä ilman sadettakin, ja mitä syvemmälle kaivat, sitä enemmän. Pelkkä pohjavesi ei silti riitä isolle talolle – sadevettäkin tarvitaan.');
       else toastOnce('welldeep',`🕳️ Kaivo syveni – nyt se on ${wellDepth(c)} ruutua syvä. Syvempään kaivoon mahtuu enemmän sadevettä.`);
       return;}
     if(!adjWalk(r,c)){toast('⛏️ Kaiva käytävän vierestä – tai kaivon alta, jos haluat syventää kaivoa.');return;}
@@ -2058,7 +2073,7 @@ function help(first){
   <li>🧱 Myyrä rikkoo huoneita ja jättää käytäviä, joista sadevesi valuu sisään. Korjaa ne 🧱 Korjaa-työkalulla!</li>
   <li>🟫 Multa on rakennusainetta: kaiva käytäviä ⛏️ ja rakenna huoneita.</li>
   <li>💭 Madon ajatuskupla kertoo, mitä se kaipaa. Napauta matoa nähdäksesi sen tarpeet.</li>
-  <li>🕳️ <b>Kaivo</b> on aukko nurmikatossa, josta sade sataa sisään. Syvennä sitä ⛏️ kaivamalla sen alta. Kaivon vesi on matojen vesivarasto: se vähenee käytössä ja hitaasti itsestään. Älä kaiva käytävää kaivon viereen – vesi valuu sisään!</li>
+  <li>🕳️ <b>Kaivo</b> on aukko nurmikatossa, josta sade sataa sisään. Syvennä sitä ⛏️ kaivamalla sen alta. Kaivon vesi on matojen vesivarasto: se vähenee käytössä ja hitaasti itsestään. Syvälle kaivettuun kaivoon tihkuu vähän <b>pohjavettä</b>, mutta sadevettäkin tarvitaan. Älä kaiva käytävää kaivon viereen – vesi valuu sisään!</li>
   <li>💧 Madot kuivuvat, varsinkin kuivalla kaudella ☀️. <b>Kylpyhuone</b> kostuttaa ne, mutta kuluttaa vesivarastoa.</li>
   <li>🐦 Rastas nokkii pinnalla lehtiä hakevia matoja. 🐾 Myyrä tunneloi sivusta – rakenna <b>salainen huone</b> piiloksi! Napauta molempia ajaaksesi ne pois.</li>
   <li>🌱🌻🍂❄️ <b>Vuodenajat</b> vaihtuvat kahden päivän välein. Keväällä sataa, kesällä on kuivaa, ja syksyllä lehtiä putoaa paljon – kerää silloin ruokaa varastoon.</li>
