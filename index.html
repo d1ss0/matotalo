@@ -1178,17 +1178,32 @@ function drawSurface(){
   drawWells();
   drawExits();
 }
-function drawWells(){
-  for(const c of wellCols()){const x=c+.5,y=SKY;
-    // kivikehä ja puinen nostoteline
-    for(const sx of [-1,1]){const bx=x+sx*.5;ctx.fillStyle='#9aa3ab';ctx.strokeStyle=INK;ctx.lineWidth=.025;
-      for(const [dy,w] of [[-.02,.2],[-.16,.18],[-.29,.16]]){ctx.beginPath();ctx.roundRect(bx-w/2,y+dy-.13,w,.13,.04);ctx.fill();ctx.stroke();}
-      ctx.fillStyle='#8a5a30';ctx.beginPath();ctx.rect(bx-.035,y-1.0,.07,.6);ctx.fill();ctx.stroke();}
-    ctx.fillStyle='#8a5a30';ctx.beginPath();ctx.roundRect(x-.62,y-1.06,1.24,.09,.03);ctx.fill();ctx.stroke();
-    ctx.strokeStyle='#6d4524';ctx.lineWidth=.06;ctx.beginPath();ctx.moveTo(x-.5,y-.78);ctx.lineTo(x+.5,y-.78);ctx.stroke();
-    ctx.strokeStyle='rgba(60,45,30,.9)';ctx.lineWidth=.02;ctx.beginPath();ctx.moveTo(x,y-.78);ctx.lineTo(x,y-.42);ctx.stroke();
-    ctx.fillStyle='#a8703c';ctx.strokeStyle=INK;ctx.lineWidth=.025;ctx.beginPath();ctx.moveTo(x-.11,y-.42);ctx.lineTo(x+.11,y-.42);ctx.lineTo(x+.08,y-.22);ctx.lineTo(x-.08,y-.22);ctx.closePath();ctx.fill();ctx.stroke();
-    if(SNOW>0){ctx.globalAlpha=SNOW;ctx.fillStyle='#f6f9fd';ctx.strokeStyle='#a9bcd2';ctx.lineWidth=.02;ctx.beginPath();ctx.roundRect(x-.64,y-1.14,1.28,.09,.05);ctx.fill();ctx.stroke();ctx.globalAlpha=1;}}
+function drawWells(){ // kaivon takaosa: nostoteline, köysi ja ämpäri (matojen takana)
+  for(const c of wellCols()){const x=c+.5,y=SKY;ctx.strokeStyle=INK;ctx.lineWidth=.025;
+    // kaivon sisäseinä näkyy reunan takaa tummana
+    ctx.fillStyle='#4a4038';ctx.beginPath();ctx.rect(x-.5,y-.4,1,.44);ctx.fill();
+    for(const sx of [-1,1]){ctx.fillStyle='#8a5a30';ctx.beginPath();ctx.rect(x+sx*.47-.04,y-1.05,.08,.7);ctx.fill();ctx.stroke();}
+    ctx.fillStyle='#8a5a30';ctx.beginPath();ctx.roundRect(x-.62,y-1.1,1.24,.09,.03);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#6d4524';ctx.lineWidth=.06;ctx.beginPath();ctx.moveTo(x-.47,y-.8);ctx.lineTo(x+.47,y-.8);ctx.stroke();
+    ctx.strokeStyle='rgba(60,45,30,.9)';ctx.lineWidth=.02;ctx.beginPath();ctx.moveTo(x,y-.8);ctx.lineTo(x,y-.56);ctx.stroke();
+    ctx.fillStyle='#a8703c';ctx.strokeStyle=INK;ctx.lineWidth=.025;ctx.beginPath();ctx.moveTo(x-.11,y-.58);ctx.lineTo(x+.11,y-.58);ctx.lineTo(x+.08,y-.4);ctx.lineTo(x-.08,y-.4);ctx.closePath();ctx.fill();ctx.stroke();
+    if(SNOW>0){ctx.globalAlpha=SNOW;ctx.fillStyle='#f6f9fd';ctx.strokeStyle='#a9bcd2';ctx.lineWidth=.02;ctx.beginPath();ctx.roundRect(x-.64,y-1.18,1.28,.09,.05);ctx.fill();ctx.stroke();ctx.globalAlpha=1;}}
+}
+function drawWellFronts(){ // kaivon kivinen etuseinä piirretään matojen eteen: ohikulkija kiertää kaivon takaa eikä leiju aukon yllä
+  for(const c of wellCols()){const x=c+.5,y=SKY,x0=x-.58,w=1.16,top=y-.44,h=.5;
+    ctx.fillStyle='#9aa3ab';ctx.strokeStyle=INK;ctx.lineWidth=.03;ctx.beginPath();ctx.roundRect(x0,top,w,h,.05);ctx.fill();ctx.stroke();
+    // kivet: kaksi limittäistä riviä
+    ctx.save();ctx.beginPath();ctx.roundRect(x0,top,w,h,.05);ctx.clip();
+    const cols=['#8d969e','#a7afb6','#959ea6','#b0b7bd','#89929a'];
+    for(let row=0;row<2;row++){const ry=top+.08+row*.21,off=row?-.14:0;
+      for(let k=0;k<5;k++){const sx=x0+off+k*.29;ctx.fillStyle=cols[(k+row*2+c)%5];ctx.strokeStyle='rgba(42,35,32,.55)';ctx.lineWidth=.018;ctx.beginPath();ctx.roundRect(sx+.015,ry,.26,.19,.06);ctx.fill();ctx.stroke();}}
+    ctx.restore();
+    // reunakivi
+    ctx.fillStyle='#bcc3c9';ctx.strokeStyle=INK;ctx.lineWidth=.03;ctx.beginPath();ctx.roundRect(x0-.05,top-.05,w+.1,.11,.05);ctx.fill();ctx.stroke();
+    // ruohotupsut juurella
+    ctx.strokeStyle='#4f9a3c';ctx.lineWidth=.03;ctx.lineCap='round';ctx.beginPath();
+    for(const gx of [x0-.02,x0+.1,x0+w-.1,x0+w+.02]){ctx.moveTo(gx,y+.06);ctx.lineTo(gx-.03,y-.07);ctx.moveTo(gx,y+.06);ctx.lineTo(gx+.04,y-.05);}ctx.stroke();ctx.lineCap='butt';
+    if(SNOW>0){ctx.globalAlpha=SNOW;ctx.fillStyle='#f6f9fd';ctx.strokeStyle='#a9bcd2';ctx.lineWidth=.02;for(const sx of [x0-.06,x0+w-.3]){ctx.beginPath();ctx.roundRect(sx,top-.1,.36,.08,.04);ctx.fill();ctx.stroke();}ctx.globalAlpha=1;}}
 }
 function drawExits(){
   for(const rm of G.rooms){if(rm.type!=='ulos')continue;const x=rm.c+1,top=SKY-.12,bot=SKY+1.02;
@@ -1695,6 +1710,7 @@ function render(){
     ctx.fillStyle='#55506a';ctx.beginPath();ctx.arc(x-.04,y-.04,.016,0,7);ctx.arc(x+.04,y-.04,.016,0,7);ctx.fill();
     ctx.strokeStyle='#ffd84d';ctx.lineWidth=.022;ctx.beginPath();ctx.ellipse(x,y-.22,.09,.03,0,0,7);ctx.stroke();ctx.globalAlpha=1;}
   if(mole)drawMole();
+  drawWellFronts();
   for(const l of leaves)drawLeafItem(l);
   if(bird)drawBird();
   drawSeasonFx();
