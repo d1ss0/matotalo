@@ -39,8 +39,8 @@ aukeaa omasta kuvakkeestaan koko näytöllä.
 - 31 x 16 ruudun puutarha ja metsä, josta putoaa lehtiä, vapaa kamera (veto, nipistys, 🔍, 🏠)
 - Vuorokausi ja valaistus, neljä vuodenaikaa (2 pelipäivää / vuodenaika)
 - Tapahtumat: sade, kuivuus, rastas, myyrä
-- Huoneet: keittiö, ruokakomero, makuuhuone, kylpyhuone, kellari, lastenhuone, lääkäri, olohuone, askarteluhuone, takkahuone, salainen huone
-- Talvi: pakkasraja, ilmainen kaivuu, aarteet, lumikasat
+- Huoneet: keittiö, ruokakomero, makuuhuone, kylpyhuone, lastenhuone, lääkäri, olohuone, askarteluhuone, takkahuone, salainen huone
+- Talvi: pakkasraja, suojasää ja ankarat talvet, lumikasat
 - Peli alkaa pinnalta: madot saapuvat, ja opastus neuvoo askel kerrallaan (portaat, käytävä, keittiö, makuuhuone, lehti, kaivo, kellari ja kylpyhuone)
 - Tikkaat rakennetaan itse kerrosten väliin (Tikkaat-työkalu); vuoroja ei ole, madot nukkuvat yleensä yöllä
 - Sadevesi: sade täyttää pelaajan kaivamat kaivot, ja kaivoissa oleva fyysinen vesi on vesivarasto
