@@ -391,6 +391,10 @@ function decide(w){
   if(sleepTime(w)&&!threat()&&n.terveys>25&&n.kosteus>20&&n.ruoka>15){w.nap=!isNight();goSleep(w);return;}
   // vessahätä
   if(!w.baby&&(w.wc||0)>65&&tryWC(w))return;
+  // pelaajan pyyntö menee omien tarpeiden edelle, ellei madolla ole todellinen hätä
+  if(!w.baby&&G.orders&&G.time<G.orders.until&&Math.min(...Object.values(n))>20){
+    if(G.orders.cook>0&&tryCook(w)){G.orders.cook--;return;}
+    if(G.orders.fetch>0&&tryFetch(w)){G.orders.fetch--;return;}}
   // tarpeet
   const order=Object.keys(n).filter(k=>n[k]<TH[k]).sort((a,b)=>n[a]-n[b]);
   for(const nd of order)if(tryNeed(w,nd))return;
@@ -455,6 +459,31 @@ function tryFetch(w,forced){
     if(!best||cost<best.cost)best={p,cost};}
   if(!best)return false;
   leaf.claim=w.id;w.leaf=leaf;think(w,'🍃',2);go(w,best.p,'fetch');return true;
+}
+// Pelaajan pyynnöt: vapaa mato lähtee heti, muuten seuraava vapautuva hoitaa asian ensimmäiseksi.
+function freeWorms(){return G.worms.filter(w=>!w.baby&&!w.dead&&!sleepTime(w)&&(w.state==='idle'||(w.state==='walk'&&!w.intent)));}
+function request(id){
+  if(!G.orders||G.time>=G.orders.until)G.orders={cook:0,fetch:0,until:0};
+  if(id==='pyydaLehti'){
+    if(!G.rooms.some(k=>isK(k)||isP(k))){toast('🍃 Rakenna ensin keittiö – madot vievät lehdet sinne.');return;}
+    if(seasonI()===3){toast('🍃 Talvella madot eivät lähde pinnalle. Lehdet haetaan keväällä taas.');return;}
+    if(threat()&&G.ev.type==='rastas'){toast('🍃 Rastas vaanii nurmikolla – madot eivät uskalla nyt ulos.');return;}
+    if(!exits().length){toast('🍃 Madot eivät pääse pinnalle – rakenna 🚪 Portaat.');return;}
+    const ls=leaves.filter(l=>l.landed&&!l.dead&&!l.claim);
+    if(!ls.length){toast('🍃 Nurmella ei ole juuri nyt vapaita lehtiä. Niitä putoaa puista vähän väliä.');return;}
+    for(const l of ls){l.prio=true;l.life=Math.max(l.life,30);}
+    const want=Math.min(3,ls.length);let sent=0;
+    for(const w of freeWorms().sort((a,b)=>wCell(a)[0]-wCell(b)[0])){if(sent>=want)break;if(tryFetch(w))sent++;}
+    G.orders.fetch=want-sent;G.orders.until=G.time+40;
+    toast(sent?`🍃 ${sent===1?'Yksi mato lähti':sent+' matoa lähti'} hakemaan lehtiä${want>sent?', ja seuraava vapaa mato lähtee perään':''}.`:'🍃 Kaikilla on nyt kiire – seuraava vapaa mato lähtee hakemaan lehtiä.');return;}
+  if(id==='pyydaKokki'){
+    const ks=kitchens().filter(k=>!broken(k));
+    if(!ks.length){toast('🍳 Rakenna ensin keittiö.');return;}
+    if(!ks.some(k=>k.leaves>0)){toast('🍳 Keittiössä ei ole lehtiä kokattavaksi – pyydä ensin hakemaan lehtiä 🍃.');return;}
+    if(!ks.some(k=>k.leaves>0&&!k.cook)){toast('🍳 Keittiössä kokataan jo.');return;}
+    const k0=ks.find(k=>k.leaves>0&&!k.cook),near=w=>Math.abs(w.x-k0.c-1)+Math.abs(wCell(w)[0]-k0.r)*2;
+    for(const w of freeWorms().sort((a,b)=>near(a)-near(b)))if(tryCook(w)){toast(`🍳 ${w.name} menee kokkaamaan.`);return;}
+    G.orders.cook=1;G.orders.until=G.time+40;toast('🍳 Kaikilla on nyt kiire – seuraava vapaa mato menee kokkaamaan.');return;}
 }
 function goSleep(w){
   const sleepers=id=>G.worms.filter(o=>o!==w&&o.sleepRoom===id&&(o.state==='sleep'||o.intent==='sleep')).length;
@@ -684,7 +713,7 @@ const EVTXT={
   kuivuus:{warn:'☀️ Aurinko alkaa paahtaa… kuiva kausi tulossa!',act:'🌵 Kuivuus! Madot kuivuvat. Kylpyhuone ja vesivarasto auttavat, metsän varjo vähän.',dur:28,cls:'',short:'🌵 Kuivuus'},
   suoja:{warn:'🌤️ Sää lauhtuu… suojasää tulossa.',act:'💧 Suojasää! Lumi sulaa, ja sulamisvesi valuu kaivoihin.',dur:22,cls:'',short:'💧 Lumi sulaa'},
   rastas:{warn:'🐦 Rastas laskeutuu nurmikolle!',act:'🐦 Rastas vaanii nurmikolla! Lehtien haku on tauolla – maan alla madot ovat turvassa. Napauta lintua ajaaksesi sen pois.',dur:18,cls:'danger',short:'🐦 Rastas! Napauta sitä'},
-  myyra:{warn:'🐾 Maa tärisee… myyrä kaivautuu kohti!',act:'🐾 Myyrä tunneloi! Napauta myyrää neljästi ajaaksesi sen pois.',dur:24,cls:'danger',short:'🐾 Myyrä! Napauta sitä'},
+  myyra:{warn:'🐾 Myyrä lähestyy puutarhan laidalta!',act:'🐾 Myyrä tulee! Napauta myyrää neljästi ajaaksesi sen pois.',dur:24,cls:'danger',short:'🐾 Myyrä! Napauta sitä'},
 };
 function startEvent(){
   const late=isNight()||dayT()>DAYLIGHT-30;
@@ -704,16 +733,22 @@ function activateEvent(){
   showBanner((sleepers&&e.type==='myyra'?'🚨 Hälytys! Nukkujat heräävät. ':'')+EVTXT[e.type].act,EVTXT[e.type].cls,0,EVTXT[e.type].short);
   if(e.type==='rastas'){sfx('chirp');const sd=rnd()<.5?-1:1;bird={x:clamp(CX+.5+sd*9,-1,COLS+1),tx:CX-2.5+rnd()*6,hp:3,peckT:2.5,peck:0,leave:false,hop:0,dir:-sd,fly:true,arrive:true,alt:1};}
   if(e.type==='myyra'){const left=rnd()<.5;let cl=COLS,ch=0;for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++)if(walk(rr,cc)){cl=Math.min(cl,cc);ch=Math.max(ch,cc);}
-    const rows=G.worms.filter(w=>w.state!=='surface').map(w=>wCell(w)[0]);const lo=1,hi=Math.min(ROWS-1,(rows.length?Math.max(...rows):3)+1);
-    // myyrä putkahtaa mullasta rakennetun alueen laidalta
-    let ec=left?Math.max(0,cl-2):Math.min(COLS-1,ch+2),ok=[];
-    for(const k of [0,left?-1:1,left?1:-1,left?-2:2]){const c2=ec+k;if(c2<0||c2>=COLS)continue;ok=[];
-      for(let rr=lo;rr<=hi;rr++){const cell=G.grid[rr][c2];if(cell.t!=='rock'&&cell.t!=='shaft'&&cell.t!=='well'&&!cell.room)ok.push(rr);}
-      if(ok.length){ec=c2;break;}}
-    const r=ok.length?ok[Math.floor(rnd()*ok.length)]:Math.max(1,hi);const cell=G.grid[r][ec];
-    if(cell.t==='soil'){cell.t='tun';cell.mole=true;dirty=true;crumbleQ.push([r,ec,.12]);if(r===1)molehill(ec);}
-    shakeT=.5;for(let i=0;i<16;i++)parts.push({x:ec+.5,y:SKY+r+.5,vx:(rnd()-.5)*4,vy:-rnd()*3,t:.8,col:['#a0683a','#c9a070','#6d4524'][i%3]});
-    sfx('rumble');mole={x:ec+.5,y:SKY+r+.62,vy:0,step:null,falling:false,hp:4,hitT:0,leave:false,dir:left?1:-1,dig:0};}
+    if(cl>ch){cl=CX-1;ch=CX+1;}
+    const base={vy:0,step:null,falling:false,hp:4,hitT:0,leave:false,dir:left?1:-1,dig:0};
+    const ec=left?Math.max(0,cl-2):Math.min(COLS-1,ch+2);
+    // 1) matojen omaa koloa pitkin, 2) maan alta sivusta jos talo on aivan laidassa, 3) muuten nurmea pitkin ja oma kolo
+    const stairs=G.rooms.filter(r=>r.type==='ulos'&&!broken(r)).sort((a,b)=>left?a.c-b.c:b.c-a.c)[0];
+    const diveOK=c=>inB(1,c)&&G.grid[0][c].t==='soil'&&!wellAt(1,c-1)&&!wellAt(1,c+1)&&(q=>q.t!=='rock'&&q.t!=='shaft'&&q.t!=='well'&&!q.room)(G.grid[1][c]);
+    let dive=-1;for(const k of [0,left?-1:1,left?1:-1,left?-2:2,left?2:-2,left?-3:3,left?3:-3]){if(diveOK(ec+k)){dive=ec+k;break;}}
+    const edgeX=left?-1.2:COLS+1.2,nearEdge=left?ec<=3:ec>=COLS-4;
+    if(stairs&&(dive<0||rnd()<.35)){mole={...base,x:edgeX,y:SKY-.38,run:{c:left?stairs.c:stairs.c+1,stairs:true}};}
+    else if(nearEdge&&(dive<0||rnd()<.5)){ // kaivautuu maan alta sivusta
+      const rows=G.worms.filter(w=>w.state!=='surface').map(w=>wCell(w)[0]);const hi=Math.min(ROWS-1,(rows.length?Math.max(...rows):3)+1),c0=left?0:COLS-1,ok=[];
+      for(let rr=1;rr<=hi;rr++){const cell=G.grid[rr][c0];if(cell.t!=='rock'&&cell.t!=='shaft'&&cell.t!=='well'&&!cell.room)ok.push(rr);}
+      const r=ok.length?ok[Math.floor(rnd()*ok.length)]:1;mole={...base,x:left?-.6:COLS+.6,y:SKY+r+.62};shakeT=.5;sfx('rumble');}
+    else if(dive>=0){mole={...base,x:edgeX,y:SKY-.38,run:{c:dive,stairs:false}};}
+    else{mole={...base,x:edgeX,y:SKY-.38,run:{c:clamp(ec,1,COLS-2),stairs:false,fail:true}};}
+    sfx('rumble');}
   if(e.type==='rastas'){for(const w of G.worms)if(w.state==='surface')w.sphase='back';}
   if(e.type==='myyra')for(const w of G.worms){
     if(w.state==='surface'){w.sphase='back';continue;}
@@ -814,7 +849,19 @@ function updateEvents(dt){
   }
   // myyrä
   if(mole){
-    mole.hitT-=dt;mole.dig+=dt;if(mole.leave){mole.leaveT=(mole.leaveT||0)+dt;if(mole.leaveT>3.5&&mole.x>-5){for(let i=0;i<14;i++)parts.push({x:mole.x,y:mole.y,vx:(rnd()-.5)*3,vy:-rnd()*2.5,t:.8,col:'#a0683a'});mole.x=-9;}}
+    mole.hitT-=dt;mole.dig+=dt;if(mole.leave&&!mole.run){mole.leaveT=(mole.leaveT||0)+dt;if(mole.leaveT>1.2&&mole.x>-5){for(let i=0;i<14;i++)parts.push({x:mole.x,y:mole.y,vx:(rnd()-.5)*3,vy:-rnd()*2.5,t:.8,col:'#a0683a'});mole.x=-9;}}
+    if(mole.run){const R=mole.run,sd=mole.x<CX+.5?-1:1;mole.y=SKY-.38;
+      if(rnd()<dt*9)parts.push({x:mole.x,y:SKY-.05,vx:-mole.dir*rnd()*1.5,vy:-rnd()*1.2,t:.4,col:'#8fae5a'});
+      if(mole.leave){mole.dir=sd;mole.x+=sd*4.5*dt;if(mole.x<-1.5||mole.x>COLS+1.5)mole=null;}
+      else{const gx=R.c+.5,d=gx-mole.x;mole.dir=Math.sign(d)||1;
+        if(Math.abs(d)>3.2*dt)mole.x+=Math.sign(d)*3.2*dt;
+        else if(R.fail){mole.leave=true;if(G.ev&&G.ev.type==='myyra')G.ev.t=Math.min(G.ev.t,.01);} // ei löytänyt kaivettavaa kohtaa
+        else{mole.x=gx;const cell=G.grid[1][R.c];
+          if(cell.t==='soil'){cell.t='tun';cell.mole=true;dirty=true;crumbleQ.push([1,R.c,.12]);molehill(R.c);}
+          mole.y=SKY+1.62;mole.run=null;shakeT=.5;sfx('rumble');
+          for(let i=0;i<16;i++)parts.push({x:gx,y:SKY+.2,vx:(rnd()-.5)*4,vy:-rnd()*3,t:.8,col:['#a0683a','#c9a070','#6d4524'][i%3]});}}
+    }
+    if(mole&&!mole.run){
     let tx,ty;
     if(mole.leave){tx=mole.x<CX+.5?-2:COLS+2;ty=mole.y;}
     else{const t=G.worms.filter(w=>w.state!=='hide'&&w.state!=='ride'&&w.state!=='surface').sort((a,b)=>Math.hypot(a.x-mole.x,a.y-mole.y)-Math.hypot(b.x-mole.x,b.y-mole.y))[0];
@@ -829,6 +876,7 @@ function updateEvents(dt){
     else if(!mole.leave&&mole.hitT<=0){for(const w of G.worms){if(w.dead||w.state==='hide'||w.state==='ride'||w.state==='surface')continue;if(Math.hypot(w.x-mole.x,w.y-.28-mole.y)<.6){mole.hitT=1.6;w.needs.terveys-=22;w.needs.ilo-=15;think(w,'😣',2);floats.push({x:w.x,y:w.y-.5,txt:'Auts!',t:1.4,col:'#c0392b'});
       if(w.needs.terveys<=0){killWorm(w,'myyra');break;}
       if(w.state!=='waitLift'){if(w.state==='use'){const rm=roomById(w.room);if(rm)rm.use=Math.max(0,rm.use-1);}for(const kk of kitchens())if(kk.cook===w.id)kk.cook=0;w.state='idle';w.timer=0;w.path=[];w.intent=null;}break;}}}
+    }
   }
 }
 
@@ -1664,9 +1712,9 @@ function render(){
 
 // ====== Työkalut ja syöte ======
 let tool='katso',selWorm=0,paused=false,speed=1;
-const TOOLS=[{id:'katso',ic:'👆',name:'Valitse'},{id:'kaiva',ic:'⛏️',name:'Kaiva',cost:1},{id:'tikkaat',ic:'🪜',name:'Tikkaat',cost:LADDER_COST},{id:'paikkaa',ic:'🧱',name:'Korjaa',cost:1},{id:'purku',ic:'🧹',name:'Pura'},
+const TOOLS=[{id:'katso',ic:'👆',name:'Valitse'},{id:'pyydaLehti',ic:'🍃',name:'Hae\nlehtiä',act:true},{id:'pyydaKokki',ic:'🍳',name:'Kokkaa',act:true},{id:'kaiva',ic:'⛏️',name:'Kaiva',cost:1},{id:'tikkaat',ic:'🪜',name:'Tikkaat',cost:LADDER_COST},{id:'paikkaa',ic:'🧱',name:'Korjaa',cost:1},{id:'purku',ic:'🧹',name:'Pura'},
   ...Object.entries(ROOMS).map(([id,d])=>({id,ic:d.ic,name:d.name.replace('huone','-\nhuone').replace('Salainen -\nhuone','Salainen\nhuone').replace('Ruokakomero','Ruoka-\nkomero').replace('Uloskäytävä','Ulos-\nkäytävä').replace('Suurkeittiö','Suur-\nkeittiö').replace('Suurvarasto','Suur-\nvarasto'),cost:d.cost,room:true}))];
-const TOOL_GROUPS=[['Työkalut',['katso','kaiva','tikkaat','paikkaa','purku']],['Perusasiat',['ulos','keittio','makuu','kaivo','kylpy','komero','wc','lasten']],['Hyvinvointi ja turva',['laakari','olo','askartelu','takka','salainen']],['Isot rakennukset 🔓',['hissi','suurkeittio','makuusali','suurvarasto']]];
+const TOOL_GROUPS=[['Työkalut',['katso','kaiva','tikkaat','paikkaa','purku']],['Pyydä madoilta',['pyydaLehti','pyydaKokki']],['Perusasiat',['ulos','keittio','makuu','kaivo','kylpy','komero','wc','lasten']],['Hyvinvointi ja turva',['laakari','olo','askartelu','takka','salainen']],['Isot rakennukset 🔓',['hissi','suurkeittio','makuusali','suurvarasto']]];
 function buildTools(){
   const el=document.getElementById('tools');el.innerHTML='';
   const seen=new Set(TOOL_GROUPS.flatMap(g=>g[1])),groups=[...TOOL_GROUPS,['Muut',TOOLS.map(t=>t.id).filter(id=>!seen.has(id))]];
@@ -1674,7 +1722,7 @@ function buildTools(){
     if(i===0){const h=document.createElement('div');h.className='tgrp';h.innerHTML='<span>'+title+'</span>';el.appendChild(h);}
     const b=document.createElement('button');b.className='tool'+(t.id===tool?' sel':'');b.dataset.id=t.id;
     b.innerHTML=`<span class="ic">${t.ic}</span>${t.name.replace('\n','<br>')}${t.cost?`<span class="c">${t.cost} 🟫</span>`:''}`;
-    b.onclick=()=>{sfx('click');if(!unlocked(t.id)){const d=ROOMS[t.id];toast(`<span class="t">🔒 ${d.ic} ${d.name}</span><br>Avautuu, kun talossa on asunut ${UNLOCK[t.id]} matoa (nyt enimmillään ${G.maxWorms||0}). Pidä madot tyytyväisinä, niin lastenhuoneeseen syntyy vauvoja.<br><small>${d.desc}</small>`);return;}tool=t.id;selWorm=0;document.querySelectorAll('.tool').forEach(x=>x.classList.toggle('sel',x.dataset.id===tool));toolInfo();};el.appendChild(b);}
+    b.onclick=()=>{sfx('click');if(t.act){request(t.id);return;}if(!unlocked(t.id)){const d=ROOMS[t.id];toast(`<span class="t">🔒 ${d.ic} ${d.name}</span><br>Avautuu, kun talossa on asunut ${UNLOCK[t.id]} matoa (nyt enimmillään ${G.maxWorms||0}). Pidä madot tyytyväisinä, niin lastenhuoneeseen syntyy vauvoja.<br><small>${d.desc}</small>`);return;}tool=t.id;selWorm=0;document.querySelectorAll('.tool').forEach(x=>x.classList.toggle('sel',x.dataset.id===tool));toolInfo();};el.appendChild(b);}
 }
 function checkUnlocks(){
   G.unl=G.unl||Object.keys(UNLOCK).filter(unlocked);
@@ -1978,6 +2026,7 @@ function help(first){
   <li>🍳 Keittiön kokkimato tekee lehdistä ruokaa 🍲 ja <b>multaa</b> 🟫. Nälkäiset madot käyvät syömässä.</li>
   <li>🧺 Keittiöön mahtuu vain 6 lehteä. <b>Ruokakomeroon</b> mahtuu 30 – kerää sinne lehtiä talven varalle, niin kokki voi tehdä multaa talvellakin.</li>
   <li>🪜 Päällekkäisten käytävien välissä on lattia. Rakenna <b>tikkaat</b> siihen kohtaan, josta haluat matojen kulkevan kerrosten väliä.</li>
+  <li>🍃🍳 <b>Pyydä madoilta</b>: madot toimivat itse, mutta napeista voit pyytää niitä hakemaan lehtiä tai kokkaamaan heti. Yksittäisen lehden saa haettua myös napauttamalla sitä.</li>
   <li>🚪 Madot kulkevat pinnalle <b>portaita</b> pitkin. Rakenna portaita puiden lähelle, niin lehtien haku nopeutuu. 🛗 <b>Hissin</b> saa rakentaa, kun talossa on asunut 8 matoa.</li>
   <li>🌙 Yöllä madot nukkuvat <b>makuuhuoneessa</b> (4 paikkaa). Joskus joku valvoo iltayön töissä tai herää aikaisin – silloin sillä on otsalamppu. Uupunut mato ottaa nokoset päivälläkin.</li>
   <li>🚨 Jos myyrä tulee yöllä, kaikki heräävät ja menevät suojaan.</li>
