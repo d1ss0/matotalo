@@ -304,7 +304,8 @@ const inB=(r,c)=>r>=0&&r<ROWS&&c>=0&&c<COLS;
 const walk=(r,c)=>inB(r,c)&&(G.grid[r][c].t==='tun'||G.grid[r][c].t==='shaft');
 const DIRS=[[0,1],[0,-1],[1,0],[-1,0]];
 const wellAt=(r,c)=>inB(r,c)&&G.grid[r][c].t==='well';
-const openTop=c=>inB(0,c)&&(G.grid[0][c].t==='shaft'||G.grid[0][c].t==='well');
+const roofHole=c=>inB(0,c)&&G.grid[0][c].t==='tun'&&!!G.grid[0][c].mole; // myyrän nurmikattoon kaivama reikä
+const openTop=c=>inB(0,c)&&(G.grid[0][c].t==='shaft'||G.grid[0][c].t==='well'||roofHole(c));
 function adjWalk(r,c){return DIRS.some(([dr,dc])=>walk(r+dr,c+dc));}
 function bfs(sr,sc,goal,pass=walk){
   if(!inB(sr,sc))return null;
@@ -742,16 +743,23 @@ function activateEvent(){
   const sleepers=G.worms.filter(w=>w.state==='sleep').length;
   showBanner((sleepers&&e.type==='myyra'?'🚨 Hälytys! Nukkujat heräävät. ':'')+EVTXT[e.type].act,EVTXT[e.type].cls,0,EVTXT[e.type].short);
   if(e.type==='rastas'){sfx('chirp');const sd=rnd()<.5?-1:1;bird={x:clamp(CX+.5+sd*9,-1,COLS+1),tx:CX-2.5+rnd()*6,hp:3,peckT:2.5,peck:0,leave:false,hop:0,dir:-sd,fly:true,arrive:true,alt:1};}
-  if(e.type==='myyra'){const left=rnd()<.5;let cl=COLS,ch=0;for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++)if(walk(rr,cc)){cl=Math.min(cl,cc);ch=Math.max(ch,cc);}
+  if(e.type==='myyra'){const left=rnd()<.5;let cl=COLS,ch=0;for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++)if(walk(rr,cc)&&!G.grid[rr][cc].mole){cl=Math.min(cl,cc);ch=Math.max(ch,cc);} // talon rajat ilman myyrän omia käytäviä
     if(cl>ch){cl=CX-1;ch=CX+1;}
     const base={vy:0,step:null,falling:false,hp:4,hitT:0,leave:false,dir:left?1:-1,dig:0};
     const ec=left?Math.max(0,cl-2):Math.min(COLS-1,ch+2);
     // 1) matojen omaa koloa pitkin, 2) maan alta sivusta jos talo on aivan laidassa, 3) muuten nurmea pitkin ja oma kolo
     const stairs=G.rooms.filter(r=>r.type==='ulos'&&!broken(r)).sort((a,b)=>left?a.c-b.c:b.c-a.c)[0];
     const diveOK=c=>inB(1,c)&&G.grid[0][c].t==='soil'&&!wellAt(1,c-1)&&!wellAt(1,c+1)&&(q=>q.t!=='rock'&&q.t!=='shaft'&&q.t!=='well'&&!q.room)(G.grid[1][c]);
-    let dive=-1;for(const k of [0,left?-1:1,left?1:-1,left?-2:2,left?2:-2,left?-3:3,left?3:-3]){if(diveOK(ec+k)){dive=ec+k;break;}}
+    const ks=[0,left?-1:1,left?1:-1,left?-2:2,left?2:-2,left?-3:3,left?3:-3];
+    let dive=-1;for(const k of ks){if(roofHole(ec+k)){dive=ec+k;break;}} // vanha oma reikä kelpaa, jos sitä ei ole korjattu
+    if(dive<0)for(const k of ks){if(diveOK(ec+k)){dive=ec+k;break;}}
     const edgeX=left?-1.2:COLS+1.2,nearEdge=left?ec<=3:ec>=COLS-4;
-    if(stairs&&(dive<0||rnd()<.35)){mole={...base,x:edgeX,y:SKY-.38,run:{c:left?stairs.c:stairs.c+1,stairs:true}};}
+    // maailma on oikeasti kolmiulotteinen: myyrä voi kaivautua esiin myös takaseinästä talon vierestä
+    const spots=[];for(let rr=1;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++){const q=G.grid[rr][cc];if(q.t!=='soil'||q.room||wellAt(rr,cc-1)||wellAt(rr,cc+1))continue;
+      const nb=(r2,c2)=>walk(r2,c2)&&!G.grid[r2][c2].mole&&G.grid[r2][c2].t!=='shaft'&&roomById(G.grid[r2][c2].room)?.type!=='salainen';
+      if(nb(rr,cc-1)||nb(rr,cc+1)||(rr>=2&&nb(rr-1,cc)))spots.push([rr,cc]);} // käytävän vieressä tai alla
+    if(spots.length&&rnd()<.45){const [rr,cc]=spots[Math.floor(rnd()*spots.length)];mole={...base,x:cc+.5,y:SKY+rr+.62,emerge:{r:rr,c:cc,t:0,dur:2.6}};sfx('rumble');}
+    else if(stairs&&(dive<0||rnd()<.35)){mole={...base,x:edgeX,y:SKY-.38,run:{c:left?stairs.c:stairs.c+1,stairs:true}};}
     else if(nearEdge&&(dive<0||rnd()<.5)){ // kaivautuu maan alta sivusta
       const rows=G.worms.filter(w=>w.state!=='surface').map(w=>wCell(w)[0]);const hi=Math.min(ROWS-1,(rows.length?Math.max(...rows):3)+1),c0=left?0:COLS-1,ok=[];
       for(let rr=1;rr<=hi;rr++){const cell=G.grid[rr][c0];if(cell.t!=='rock'&&cell.t!=='shaft'&&cell.t!=='well'&&!cell.room)ok.push(rr);}
@@ -772,13 +780,15 @@ function endEvent(){
   if(bird)bird.leave=true;if(mole)mole.leave=true;
   showBanner({suoja:'❄️ Pakkanen palasi.',sade:'🌤️ Sade loppui.',kuivuus:'🌦️ Kuiva kausi päättyi.',rastas:'🐦 Rastas lensi pois.',myyra:'🐾 Myyrä kaivautui pois. Sen käytävät päästävät sadevettä sisään – paikkaa ne mullalla 🧱.'}[t],'good',t==='myyra'?6:4);
 }
+// Myyrä saalistaa: se valitsee lähimmän madon ja pysyy sen perässä. Jos madot ovat piilossa, se menee tuhoamaan lähintä huonetta, mieluiten ruokavarastoa.
 function molePickGoal(m,forceRandom){
-  const opts=[];const ws=G.worms.filter(w=>!['hide','ride','surface','waitLift'].includes(w.state));
-  const rms=G.rooms.filter(r=>r.type!=='salainen');const roll=rnd();
-  if(!forceRandom&&ws.length&&roll<.5){const w=ws[Math.floor(rnd()*ws.length)];m.goal={worm:w.id};}
-  else if(rms.length&&roll<.8){const r=rms[Math.floor(rnd()*rms.length)];m.goal={r:r.r,c:r.c+(rnd()<.5?0:1)};}
-  else{for(let k=0;k<20;k++){const r=1+Math.floor(rnd()*(ROWS-1)),c=Math.floor(rnd()*COLS);const cell=G.grid[r][c];if(cell.t==='rock'||(cell.room&&roomById(cell.room)?.type==='salainen'))continue;m.goal={r,c};break;}}
-  m.goalT=5+rnd()*4;
+  const ws=G.worms.filter(w=>!w.dead&&!['hide','ride','surface','waitLift'].includes(w.state));
+  const rms=G.rooms.filter(r=>r.type!=='salainen'&&r.type!=='ulos'&&!broken(r));
+  const dist=(x,y)=>Math.hypot(x-m.x,(y-m.y)*1.5);
+  if(forceRandom){for(let k=0;k<20;k++){const r=1+Math.floor(rnd()*(ROWS-1)),c=clamp(Math.floor(m.x)+Math.floor((rnd()-.5)*8),0,COLS-1);const cell=G.grid[r][c];if(cell.t==='rock'||cell.t==='well'||(cell.room&&roomById(cell.room)?.type==='salainen'))continue;m.goal={r,c};break;}m.goalT=3;if(!m.goal)m.goal={r:1,c:CX};return;}
+  if(ws.length){const w=ws.sort((a,b)=>dist(a.x,a.y)-dist(b.x,b.y))[0];if(!m.goal||m.goal.worm!==w.id)floats.push({x:m.x,y:m.y-.45,txt:'👀',t:1,col:'#2a2320'});m.goal={worm:w.id};m.goalT=7;return;}
+  if(rms.length){const r=rms.sort((a,b)=>(dist(a.c+1,SKY+a.r+.6)-(isKit(a.type)||isStore(a.type)?4:0))-(dist(b.c+1,SKY+b.r+.6)-(isKit(b.type)||isStore(b.type)?4:0)))[0];m.goal={r:r.r,c:r.c+(rnd()<.5?0:1)};m.goalT=9;return;}
+  m.goal={r:clamp(Math.floor(m.y-SKY),1,ROWS-1),c:clamp(Math.floor(m.x)+(rnd()<.5?-3:3),0,COLS-1)};m.goalT=4;
 }
 function moleMove(tx,ty,dt){
   const m=mole,mr=Math.floor(m.y-SKY),mc=Math.floor(m.x);
@@ -787,7 +797,7 @@ function moleMove(tx,ty,dt){
     m.goalT=(m.goalT||0)-dt;m.boldT=Math.max(0,(m.boldT||0)-dt);
     let gx=null,gy=null;if(m.goal){if(m.goal.worm){const w=G.worms.find(o=>o.id===m.goal.worm);if(w&&!['hide','ride','surface','waitLift'].includes(w.state)){gx=w.x;gy=w.y-.3;}}else{gx=m.goal.c+.5;gy=SKY+m.goal.r+.62;}}
     const reached=gx!==null&&Math.hypot(gx-m.x,gy-m.y)<.4;
-    if(gx===null||m.goalT<=0||reached||m.stuckT>2.5){if(m.stuckT>2.5){m.boldT=3;m.stuckT=0;}molePickGoal(m,m.boldT>0);
+    if(gx===null||m.goalT<=0||(reached&&!m.goal.worm&&m.goalT<6)||m.stuckT>2.5){if(m.stuckT>2.5){m.boldT=3;m.stuckT=0;}molePickGoal(m,m.boldT>0);
       if(m.goal.worm){const w=G.worms.find(o=>o.id===m.goal.worm);gx=w.x;gy=w.y-.3;}else{gx=m.goal.c+.5;gy=SKY+m.goal.r+.62;}}
     tx=gx;ty=gy;}
   const blocked=(r,c)=>{if(!inB(r,c))return false;if(G.grid[r][c].t==='well'||wellAt(r,c-1)||wellAt(r,c+1))return true;const cell=G.grid[r][c];if(cell.t==='rock'||(r===0&&cell.t==='soil'))return true;const rm=cell.room&&roomById(cell.room);return !!(rm&&rm.type==='salainen');};
@@ -873,11 +883,22 @@ function updateEvents(dt){
         if(Math.abs(d)>3.2*dt)mole.x+=Math.sign(d)*3.2*dt;
         else if(R.fail){mole.leave=true;if(G.ev&&G.ev.type==='myyra')G.ev.t=Math.min(G.ev.t,.01);} // ei löytänyt kaivettavaa kohtaa
         else{mole.x=gx;const cell=G.grid[1][R.c];
-          if(cell.t==='soil'){cell.t='tun';cell.mole=true;dirty=true;crumbleQ.push([1,R.c,.12]);molehill(R.c);}
+          if(!R.stairs){const roof=G.grid[0][R.c];if(roof.t==='soil'){roof.t='tun';roof.mole=true;crumbleQ.push([0,R.c,.05]);
+            toast('<span class="t">🕳️ Myyrä kaivoi reiän nurmikattoon!</span><br>Korjaa reikä 🧱 Korjaa-työkalulla, muuten sade valuu siitä sisään.');}}
+          if(cell.t==='soil'){cell.t='tun';cell.mole=true;crumbleQ.push([1,R.c,.12]);molehill(R.c);}dirty=true;
           mole.y=SKY+1.62;mole.run=null;shakeT=.5;sfx('rumble');
           for(let i=0;i<16;i++)parts.push({x:gx,y:SKY+.2,vx:(rnd()-.5)*4,vy:-rnd()*3,t:.8,col:['#a0683a','#c9a070','#6d4524'][i%3]});}}
     }
-    if(mole&&!mole.run){
+    if(mole&&mole.emerge){const E=mole.emerge;E.t+=dt;const ex=E.c+.5,ey=SKY+E.r+.5;
+      if(mole.leave){mole=null;}
+      else{if(rnd()<dt*(6+E.t*8))parts.push({x:ex+(rnd()-.5)*.6*(E.t/E.dur+.2),y:ey+(rnd()-.5)*.5*(E.t/E.dur+.2),vx:(rnd()-.5)*2.2,vy:-rnd()*1.8,t:.6,col:['#a0683a','#c9a070','#6d4524'][Math.floor(rnd()*3)]});
+        if(rnd()<dt*3)shakeT=Math.max(shakeT,.25);
+        if(E.t>=E.dur){const cell=G.grid[E.r][E.c];if(cell.t==='soil'){cell.t='tun';cell.mole=true;dirty=true;crumbleQ.push([E.r,E.c,.12]);}
+          mole.emerge=null;mole.popT=.35;shakeT=.6;sfx('rumble');
+          for(let i=0;i<22;i++)parts.push({x:ex,y:ey,vx:(rnd()-.5)*5,vy:-rnd()*3.5,t:.9,col:['#a0683a','#c9a070','#6d4524'][i%3]});}}
+    }
+    if(mole&&!mole.run&&!mole.emerge){
+    mole.popT=Math.max(0,(mole.popT||0)-dt);
     let tx,ty;
     if(mole.leave){tx=mole.x<CX+.5?-2:COLS+2;ty=mole.y;}
     else{const t=G.worms.filter(w=>w.state!=='hide'&&w.state!=='ride'&&w.state!=='surface').sort((a,b)=>Math.hypot(a.x-mole.x,a.y-mole.y)-Math.hypot(b.x-mole.x,b.y-mole.y))[0];
@@ -928,7 +949,7 @@ function updateWorld(dt){
   // partikkelit
   for(const p of parts){p.t-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=6*dt;}parts=parts.filter(p=>p.t>0);
   for(const f of floats){f.t-=dt;f.y-=dt*.6;}floats=floats.filter(f=>f.t>0);
-  for(const d of rain){d.y+=d.v*dt;d.x-=dt*1.2;}rain=rain.filter(d=>d.y<SKY-.05||(d.y<SKY+1.2&&wellAt(0,Math.floor(d.x))));
+  for(const d of rain){d.y+=d.v*dt;d.x-=dt*1.2;}rain=rain.filter(d=>d.y<SKY-.05||(d.y<SKY+1.2&&(wellAt(0,Math.floor(d.x))||roofHole(Math.floor(d.x)))));
   if(missingMsgT>0)missingMsgT-=dt;
 }
 
@@ -965,7 +986,10 @@ function wellCols(){const o=[];for(let c=0;c<COLS;c++)if(G.grid[0][c].t==='well'
 function wellDepth(c){let d=0;while(d<ROWS&&G.grid[d][c].t==='well')d++;return d;}
 // sataa jokaiseen kaivoon; täysi kaivo ei ota enempää vastaan
 function spawnRainWater(){for(const c of wellCols()){
-  const fx=c*FD+2+Math.floor(rnd()*(FD-4)),fy=SKY*FD+1;if(fmat[fy*FW+fx]===F_EMPTY)fmat[fy*FW+fx]=F_WATER;}}
+  const fx=c*FD+2+Math.floor(rnd()*(FD-4)),fy=SKY*FD+1;if(fmat[fy*FW+fx]===F_EMPTY)fmat[fy*FW+fx]=F_WATER;}
+  // myyrän kattoon kaivamasta reiästä sataa sisään, kunnes se korjataan
+  for(let c=0;c<COLS;c++)if(roofHole(c)&&rnd()<.5){const fx=c*FD+2+Math.floor(rnd()*(FD-4)),fy=SKY*FD+1;if(fmat[fy*FW+fx]===F_EMPTY)fmat[fy*FW+fx]=F_WATER;
+    toastOnce('roofrain','🌧️ Sade valuu sisään myyrän kaivamasta reiästä! Korjaa reikä 🧱 Korjaa-työkalulla.');}}
 function spawnLeakWater(){const ms=[];for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(G.grid[r][c].mole&&G.grid[r][c].t==='tun')ms.push([r,c]);if(!ms.length)return;
   const [r,c]=ms[Math.floor(rnd()*ms.length)];const fx=c*FD+1+Math.floor(rnd()*(FD-2)),fy=(r+SKY)*FD+1;if(fmat[fy*FW+fx]===F_EMPTY)fmat[fy*FW+fx]=F_WATER;}
 // Kaivo: sadevesi kertyy kaivoihin. Varastoon nostetaan vettä kaivon pinnasta sitä mukaa kuin tilaa on.
@@ -1569,8 +1593,20 @@ function drawBird(){
   ctx.restore();
   if(!b.fly){for(let i=0;i<b.hp;i++){ctx.font=`.18px sans-serif`;}}
 }
+function drawMoleEmerge(){ // multa halkeilee ja pullistuu, reikä kasvaa ja lopuksi kuono ja kynnet pilkistävät
+  const E=mole.emerge,k=clamp(E.t/E.dur,0,1),x=E.c+.5+Math.sin(T*40)*.012*(1+k*2),y=SKY+E.r+.5,R=.1+.4*k;
+  ctx.save();ctx.translate(x,y);
+  ctx.strokeStyle='rgba(30,20,12,.8)';ctx.lineWidth=.03;ctx.lineCap='round';ctx.beginPath();
+  for(let i=0;i<7;i++){const a=i*.9+E.c,len=R+.1+.22*k*(.6+((i*37)%10)/10);ctx.moveTo(Math.cos(a)*R*.8,Math.sin(a)*R*.7);ctx.lineTo(Math.cos(a+.2)*len,Math.sin(a+.2)*len*.85);}ctx.stroke();
+  const g=ctx.createRadialGradient(0,0,R*.2,0,0,R);g.addColorStop(0,'#120b07');g.addColorStop(.75,'#2a1a10');g.addColorStop(1,'#6d4524');
+  ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(0,0,R,R*.82,0,0,7);ctx.fill();ctx.strokeStyle='#8b5d3b';ctx.lineWidth=.05;ctx.stroke();
+  if(k>.45){const q=(k-.45)/.55,wig=Math.sin(T*18)*.03; // kynnet raapivat ja kuono pilkistää
+    ctx.fillStyle='#f3b6b0';ctx.strokeStyle='#1c171b';ctx.lineWidth=.02;
+    for(const sx of [-1,1]){ctx.save();ctx.translate(sx*R*.55,R*.25-q*.1+wig*sx);ctx.rotate(sx*.5);for(let j=-1;j<=1;j++){ctx.beginPath();ctx.ellipse(j*.045,0,.022,.07*q+.02,0,0,7);ctx.fill();ctx.stroke();}ctx.restore();}
+    if(k>.7){const n=(k-.7)/.3;ctx.fillStyle='#4d434b';ctx.beginPath();ctx.ellipse(0,.05,.16*n,.13*n,0,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#f08a8a';ctx.beginPath();ctx.ellipse(0,.02,.07*n,.055*n,0,0,7);ctx.fill();ctx.stroke();}}
+  ctx.restore();ctx.lineCap='butt';}
 function drawMole(){
-  const m=mole;ctx.save();ctx.translate(m.x,m.y);ctx.scale(m.dir||1,1);if(m.falling)ctx.rotate(Math.sin(T*12)*.3);ctx.scale(.024,.024);
+  const m=mole;ctx.save();ctx.translate(m.x,m.y);ctx.scale(m.dir||1,1);if(m.popT>0){const q=1-m.popT/.35;ctx.scale(.4+.6*q,.4+.6*q);}if(m.falling)ctx.rotate(Math.sin(T*12)*.3);ctx.scale(.024,.024);
   const ph=T*10,bob=Math.sin(ph)*.8;
   const g=ctx.createRadialGradient(-4,-6,2,0,0,22);g.addColorStop(0,'#8a7d86');g.addColorStop(1,'#4d434b');
   ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(-2,bob,19,12,0,0,7);ctx.fill();ctx.strokeStyle='#1c171b';ctx.lineWidth=2;ctx.stroke();
@@ -1723,7 +1759,7 @@ function render(){
     ctx.fillStyle='#ffffff';ctx.beginPath();ctx.ellipse(x,y,.11,.16,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(x,y+.14,.13,.1,0,0,Math.PI);ctx.fill();
     ctx.fillStyle='#55506a';ctx.beginPath();ctx.arc(x-.04,y-.04,.016,0,7);ctx.arc(x+.04,y-.04,.016,0,7);ctx.fill();
     ctx.strokeStyle='#ffd84d';ctx.lineWidth=.022;ctx.beginPath();ctx.ellipse(x,y-.22,.09,.03,0,0,7);ctx.stroke();ctx.globalAlpha=1;}
-  if(mole)drawMole();
+  if(mole&&mole.emerge)drawMoleEmerge();else if(mole)drawMole();
   drawWellFronts();
   for(const l of leaves)drawLeafItem(l);
   if(bird)drawBird();
@@ -2070,12 +2106,12 @@ function help(first){
   <li>🚪 Madot kulkevat pinnalle <b>portaita</b> pitkin. Rakenna portaita puiden lähelle, niin lehtien haku nopeutuu. 🛗 <b>Hissin</b> saa rakentaa, kun talossa on asunut 8 matoa.</li>
   <li>🌙 Yöllä madot nukkuvat <b>makuuhuoneessa</b> (4 paikkaa). Joskus joku valvoo iltayön töissä tai herää aikaisin – silloin sillä on otsalamppu. Uupunut mato ottaa nokoset päivälläkin.</li>
   <li>🚨 Jos myyrä tulee yöllä, kaikki heräävät ja menevät suojaan.</li>
-  <li>🧱 Myyrä rikkoo huoneita ja jättää käytäviä, joista sadevesi valuu sisään. Korjaa ne 🧱 Korjaa-työkalulla!</li>
+  <li>🧱 Myyrä rikkoo huoneita ja jättää käytäviä ja reikiä nurmikattoon, joista sadevesi valuu sisään. Korjaa ne 🧱 Korjaa-työkalulla!</li>
   <li>🟫 Multa on rakennusainetta: kaiva käytäviä ⛏️ ja rakenna huoneita.</li>
   <li>💭 Madon ajatuskupla kertoo, mitä se kaipaa. Napauta matoa nähdäksesi sen tarpeet.</li>
   <li>🕳️ <b>Kaivo</b> on aukko nurmikatossa, josta sade sataa sisään. Syvennä sitä ⛏️ kaivamalla sen alta. Kaivon vesi on matojen vesivarasto: se vähenee käytössä ja hitaasti itsestään. Syvälle kaivettuun kaivoon tihkuu vähän <b>pohjavettä</b>, mutta sadevettäkin tarvitaan. Älä kaiva käytävää kaivon viereen – vesi valuu sisään!</li>
   <li>💧 Madot kuivuvat, varsinkin kuivalla kaudella ☀️. <b>Kylpyhuone</b> kostuttaa ne, mutta kuluttaa vesivarastoa.</li>
-  <li>🐦 Rastas nokkii pinnalla lehtiä hakevia matoja. 🐾 Myyrä tunneloi sivusta – rakenna <b>salainen huone</b> piiloksi! Napauta molempia ajaaksesi ne pois.</li>
+  <li>🐦 Rastas nokkii pinnalla lehtiä hakevia matoja. 🐾 Myyrä tulee nurmea pitkin, matojen portaista tai kaivautuu esiin talon vierestä ja saalistaa lähintä matoa – rakenna <b>salainen huone</b> piiloksi! Napauta molempia ajaaksesi ne pois.</li>
   <li>🌱🌻🍂❄️ <b>Vuodenajat</b> vaihtuvat kahden päivän välein. Keväällä sataa, kesällä on kuivaa, ja syksyllä lehtiä putoaa paljon – kerää silloin ruokaa varastoon.</li>
   <li>❄️ Talvella madot pysyvät kotona ja elävät varastoilla. <b>Pakkanen</b> hiipii pinnalta maahan, ja madot palelevat pakkasrajan yläpuolella: kaiva syvemmälle tai rakenna <b>takkahuone</b> 🔥.</li>
   <li>❄️ Talvella madot pysyvät kotona. Suojasäällä lumi sulaa kaivoihin, mutta ankarana talvena ei – kerää vettä talteen syksyn sateista. Napauta pinnan <b>lumikasoja</b>, niin saat vähän vettä 💧.</li>
