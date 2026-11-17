@@ -23,6 +23,8 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;-webkit-user-
 .stat{display:flex;align-items:center;gap:2px;background:#fff;border:2px solid var(--ink);border-radius:10px 13px 9px 12px;padding:0 6px;white-space:nowrap;line-height:1.35}
 .stat b{font-weight:normal;font-size:17px}
 .sp{flex:1}
+.btns{display:flex;gap:4px;margin-left:auto;flex-wrap:nowrap}
+#bSpeed{width:44px;padding:0;text-align:center;overflow:hidden}
 button{font-family:inherit;color:var(--ink);cursor:pointer}
 .hbtn{border:2px solid var(--ink);background:#fff;border-radius:10px 12px 10px 13px;font-size:17px;padding:0 8px;line-height:1.35;white-space:nowrap}
 #banner{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 20px);z-index:5;pointer-events:none;background:#ffe9a8;border:2px solid var(--ink);border-radius:12px 15px 11px 14px;box-shadow:0 3px 0 rgba(42,35,32,.35);padding:4px 14px;font-size:17px;text-align:center;display:none;line-height:1.2;opacity:.94}
@@ -64,11 +66,12 @@ canvas{display:block;touch-action:none;position:absolute;left:0;top:0}
 .clock{position:relative;padding-bottom:6px;gap:4px}
 .dayb{position:absolute;left:6px;right:6px;bottom:2px;height:4px;border-radius:2px;background:#ffcf3f}
 .dayb s{position:absolute;top:-2px;width:4px;height:8px;background:var(--ink);border-radius:2px;transform:translateX(-50%)}
-@media (pointer:coarse){.hbtn{min-width:44px;min-height:40px;font-size:21px}}
+@media (pointer:coarse){.hbtn{min-width:44px;min-height:40px;font-size:21px}#bSpeed{width:50px}}
 @media (min-width:700px){
   #hud{font-size:17px;padding:6px 8px;gap:4px}
   .stat{padding:1px 6px}.stat b{font-size:18px}
   .hbtn{font-size:21px;min-width:44px;min-height:40px;padding:0 10px}
+  #bSpeed{width:50px}
   #info{font-size:18px;height:92px}#info .t{font-size:21px}.bar{font-size:15px}
   #banner{font-size:18px}#banner.mini{font-size:16px}
   #overlay .card{max-width:560px;font-size:19px}
@@ -100,12 +103,13 @@ canvas{display:block;touch-action:none;position:absolute;left:0;top:0}
   <span class="stat" title="Tyytyväisyys"><b id="sMood">🙂</b></span>
   <span class="stat" id="stGoal" title="Seuraava uusi huone avautuu, kun talossa on asunut näin monta matoa">🔓 <b id="sGoal">0</b></span>
   <span class="stat clock" title="Vuorokausi"><b id="sAika">☀️</b><span id="sPaiva">Kevät</span><i class="dayb" id="sDayB"><s id="sDayM"></s></i></span>
-  <span class="sp"></span>
+  <span class="btns">
   <button class="hbtn" id="bSound" title="Äänet päälle tai pois">🔊</button>
   <button class="hbtn" id="bHome" title="Koti">🏠</button>
   <button class="hbtn" id="bZoom" title="Lähennä tai loitonna">🔍</button>
   <button class="hbtn" id="bSpeed">▶︎</button>
   <button class="hbtn" id="bHelp">?</button>
+  </span>
 </div>
 <div id="stage"><canvas id="cv"></canvas><div id="banner"></div><div id="tut"></div></div>
 <div id="info"></div>
