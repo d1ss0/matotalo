@@ -105,6 +105,7 @@ img.emo{height:1.15em;width:auto;vertical-align:-.25em}
   <span class="stat" title="Tyytyväisyys"><b id="sMood">🙂</b></span>
   <span class="stat" id="stGoal" title="Seuraava uusi huone avautuu, kun talossa on asunut näin monta matoa">🔓 <b id="sGoal">0</b></span>
   <span class="stat clock" title="Vuorokausi"><b id="sAika">☀️</b><span id="sPaiva">Kevät</span><i class="dayb" id="sDayB"><s id="sDayM"></s></i></span>
+  <span class="stat" id="stAarre" title="Aarteet – niillä rakennetaan hienoja juttuja" style="display:none">💰 <b id="sAarre">0</b></span>
   <span class="stat" id="stDay" title="Montako päivää peliä on pelattu">📅 <b id="sDay">1</b></span>
   <span class="btns">
   <button class="hbtn" id="bSound" title="Äänet päälle tai pois">🔊</button>
@@ -146,6 +147,10 @@ const ROOMS={
   makuusali:{name:'Makuusali',ic:'🛌',w:3,cost:20,need:'lepo',wall:'#bccbee',desc:'Iso makuuhuone kolmen ruudun levyiseen tilaan: kahdeksan sänkypaikkaa kerrossängyissä.'},
   suurvarasto:{name:'Suurvarasto',ic:'📦',w:3,cost:30,need:null,wall:'#dcc89a',desc:'Iso varasto kolmen ruudun levyiseen tilaan: 80 lehteä ja +250 multaa.'},
   pelatin:{name:'Linnunpelätin',ic:'🧑‍🌾',cost:10,need:null,special:true,desc:'Pelätin pitää rastaan loitolla kolmen ruudun päähän kumpaankin suuntaan. Sen suojassa madot uskaltavat hakea lehtiä rastaankin aikana. Rakenna useampi, niin suojattu alue kasvaa.',hint:'Napauta nurmea tai taivasta kohdasta, johon haluat pelättimen. Purku 🧹-työkalulla palauttaa puolet mullasta.'},
+  aarre:{name:'Aarrekammio',ic:'💰',cost:10,need:null,wall:'#f3d98b',desc:'Kaivaessa maan alta löytyy aarteita. Kun talossa on aarrekammio, madot kantavat aarteet tänne talteen. Aarteilla rakennetaan hienoja juttuja: tauluja, kristallikruunuja ja suihkulähteitä.'},
+  taulu:{name:'Taulu',ic:'🖼️',gem:2,special:true,desc:'Kaunis taulu huoneen seinälle. Madot ilahtuvat aina, kun ne ovat huoneessa.',hint:'Napauta huonetta, johon haluat taulun.'},
+  kruunu:{name:'Kristallikruunu',ic:'✨',gem:5,special:true,desc:'Kimalteleva kristallikruunu huoneen kattoon. Huone loistaa, ja madot ilahtuvat siellä paljon.',hint:'Napauta huonetta, johon haluat kruunun.'},
+  suihku:{name:'Suihkulähde',ic:'⛲',gem:8,special:true,desc:'Suihkulähde nurmelle. Pinnalla lehtiä hakevat madot ilahtuvat sen lähellä.',hint:'Napauta nurmea tai taivasta kohdasta, johon haluat suihkulähteen.'},
   salainen:{name:'Salainen huone',ic:'🗝️',cost:18,need:null,wall:'#4d3f5c',desc:'Turvapaikka: madot piiloutuvat tänne rastaan ja myyrän ajaksi. Mahtuu 4 matoa.'},
 };
 const NEEDS={ruoka:{ic:'🍃',n:'Ruoka'},kosteus:{ic:'💧',n:'Kosteus'},lepo:{ic:'💤',n:'Lepo'},ilo:{ic:'🎈',n:'Ilo'},terveys:{ic:'❤️',n:'Terveys'}};
@@ -155,6 +160,8 @@ const FLOOR=.94;
 // isommat huoneet avautuvat, kun talossa on asunut tarpeeksi matoja
 const TW=t=>(ROOMS[t]&&ROOMS[t].w)||2; // huonetyypin leveys ruutuina
 const RW=rm=>rm.w||2,RCX=rm=>rm.c+RW(rm)/2; // rakennetun huoneen leveys ja keskikohta
+const TREAS={kolikko:{ic:'🪙',v:1,n:'Kolikko'},simpukka:{ic:'🐚',v:1,n:'Simpukka'},ruukku:{ic:'🏺',v:2,n:'Ruukku'},kide:{ic:'💎',v:3,n:'Jalokivi'}};
+const treasures=()=>G.treasures||(G.treasures=[]),fountains=()=>G.fountains||(G.fountains=[]);
 const UNLOCK={pelatin:5,hissi:8,suurkeittio:15,makuusali:15,suurvarasto:20};
 const unlocked=t=>!UNLOCK[t]||(G.maxWorms||0)>=UNLOCK[t];
 const isKit=t=>t==='keittio'||t==='suurkeittio',isStore=t=>t==='komero'||t==='suurvarasto',isBedT=t=>t==='makuu'||t==='makuusali';
@@ -273,6 +280,7 @@ function addMulta(v){const cap=multaCap(),was=G.multa;G.multa=Math.max(was,Math.
 let ghosts=[];
 function killWorm(w,cause){
   if(w.dead)return;w.dead=true;
+  if(w.carryT){const [tr,tc]=wCell(w);if(walkB(tr,tc))treasures().push({id:G.nextId++,r:tr,c:tc,k:w.carryT,claim:0});w.carryT=null;}
   if(w.state==='use'){const rm=roomById(w.room);if(rm)rm.use=Math.max(0,rm.use-1);}
   for(const kk of kitchens())if(kk.cook===w.id)kk.cook=0;
   if(w.leaf){w.leaf.claim=0;w.leaf=null;}
@@ -320,6 +328,7 @@ const roofHole=c=>inB(0,c)&&G.grid[0][c].t==='tun'&&!!G.grid[0][c].mole; // myyr
 const CROW_R=3.5;
 const crows=()=>G.crows||(G.crows=[]);
 const safeX=x=>crows().some(c=>Math.abs(x-(c+.5))<=CROW_R); // pelättimen suojassa
+const fountainOK=c=>c>=0&&c<COLS&&!openTop(c)&&!crows().some(cc=>Math.abs(cc-c)<2)&&!fountains().some(f=>Math.abs(f-c)<2);
 const coveredSeg=(a,b)=>{const lo=Math.min(a,b),hi=Math.max(a,b);for(let x=lo;x<hi;x+=.25)if(!safeX(x))return false;return safeX(hi);};
 const birdThreat=()=>threat()&&G.ev.type==='rastas';
 function freeX(pref){let b=null,bd=1e9;for(let x=1;x<=COLS-1;x+=.5)if(!safeX(x)){const d=Math.abs(x-pref);if(d<bd){bd=d;b=x;}}return b;} // lähin kohta, jossa rastas voi olla
@@ -394,6 +403,7 @@ function decide(w){
   w.room=0;w.intent=null;
   for(const k of kitchens())if(k.cook===w.id)k.cook=0;
   if(w.leaf&&!w.carry){w.leaf.claim=0;w.leaf=null;}
+  if(w.tgt&&!w.carryT){for(const t of treasures())if(t.claim===w.id)t.claim=0;w.tgt=0;}
   // uhka -> piiloon
   if(threat()&&(inDanger(w)||(G.ev.type==='myyra'&&countRooms('salainen')))){
     const here=roomAt(r,c);
@@ -409,6 +419,7 @@ function decide(w){
   if(flooded(r)){const p=route(w,(rr)=>!flooded(rr)&&floodFrac[rr]<.05);if(p){go(w,p,null);think(w,'🌊',2);return;}}
   // kannettava lehti keittiöön
   if(w.carry){const p=storeRoute(g=>route(w,g));if(p){go(w,p,'deliver');return;}}
+  if(w.carryT){const p=route(w,(rr,cc)=>{const ro=roomAt(rr,cc);return ro&&ro.type==='aarre'&&!broken(ro);});if(p){go(w,p,'stash');return;}}
   const n=w.needs;
   // yö -> nukkumaan
   if(sleepTime(w)&&!threat()&&n.terveys>25&&n.kosteus>20&&n.ruoka>15){w.nap=!isNight();goSleep(w);return;}
@@ -422,7 +433,7 @@ function decide(w){
   const order=Object.keys(n).filter(k=>n[k]<TH[k]).sort((a,b)=>n[a]-n[b]);
   for(const nd of order)if(tryNeed(w,nd))return;
   // työt
-  if(!w.baby&&!sleepTime(w)){if(tryCook(w))return;if(tryRestock(w))return;if(tryFetch(w))return;}
+  if(!w.baby&&!sleepTime(w)){if(tryCook(w))return;if(tryTreasure(w))return;if(tryRestock(w))return;if(tryFetch(w))return;}
   // kylmästä lämpimään
   if(coldAt(r,c)){const p=route(w,(rr,cc)=>!coldAt(rr,cc)&&G.grid[rr][cc].t!=='shaft');if(p&&p.length){go(w,p,null);think(w,'🥶',2);return;}}
   // vapaa-aika
@@ -430,6 +441,14 @@ function decide(w){
   const opts=[[r,c-1],[r,c+1]].filter(([rr,cc])=>walk(rr,cc)&&G.grid[rr][cc].t!=='shaft');
   if(opts.length&&rnd()<.5){go(w,[opts[Math.floor(rnd()*opts.length)]],null);w.timer=2;return;}
   w.state='idle';w.timer=2+rnd()*2.5;
+}
+function tryTreasure(w){
+  if(w.carry||w.carryT||!treasures().length||!G.rooms.some(ro=>ro.type==='aarre'&&!broken(ro)))return false;
+  G.treasures=treasures().filter(t=>walkB(t.r,t.c));
+  const free=treasures().filter(t=>!t.claim);if(!free.length)return false;
+  const p=route(w,(rr,cc)=>free.some(t=>t.r===rr&&t.c===cc));if(!p)return false;
+  const [gr,gc]=p.length?p[p.length-1]:wCell(w);const t=free.find(q=>q.r===gr&&q.c===gc);if(!t)return false;
+  t.claim=w.id;w.tgt=t.id;think(w,TREAS[t.k].ic,2);go(w,p,'treasure');return true;
 }
 function tryNeed(w,nd,quiet){
   const types=NEED_ROOM[nd];
@@ -539,6 +558,10 @@ function arrive(w){
       if(n-add>0)w.carryN=n-add;else{w.carry=false;w.carryN=0;w.fromStore=false;}
       w.timer=0; // jos jäi yli, decide etsii toisen paikan
     }}
+  else if(it==='treasure'){const t=treasures().find(q=>q.id===w.tgt&&q.r===r&&q.c===c);
+    if(t&&!w.carryT){G.treasures=treasures().filter(q=>q!==t);w.carryT=t.k;w.tgt=0;sfx('sparkle',.5);floats.push({x:w.x,y:w.y-.45,txt:TREAS[t.k].ic+'!',t:1.2,col:'#b8860b'});}w.timer=0;}
+  else if(it==='stash'){if(rm&&rm.type==='aarre'&&w.carryT){const v=TREAS[w.carryT].v;G.aarteet=(G.aarteet||0)+v;w.carryT=null;sfx('chime',.6);floats.push({x:w.x,y:w.y-.45,txt:'+'+v+' 💰',t:1.5,col:'#b8860b'});
+      if(!G.stats.aarre1){G.stats.aarre1=true;toast('<span class="t">💰 Ensimmäinen aarre talletettu!</span><br>Aarteilla voit rakentaa hienoja juttuja: 🖼️ taulun (2 💰), ✨ kristallikruunun (5 💰) tai ⛲ suihkulähteen (8 💰). Löydät ne työkalujen "Aarteet"-ryhmästä.');}}w.timer=0;}
   else if(it==='restock'){if(rm&&isStore(rm.type)&&rm.leaves>0&&!w.carry){const n=Math.min(3,rm.leaves);rm.leaves-=n;w.carry=true;w.carryN=n;w.fromStore=true;floats.push({x:w.x,y:w.y-.4,txt:'-'+n+' 🍃',t:1.2,col:'#6b5a4a'});}w.timer=0;}
   w.goalRoom=0;
 }
@@ -636,6 +659,8 @@ function updateWorm(w,dt){
     else n.lepo-=(w.state==='cook'?0.4:0.28)*k*dt;
     n.ilo-=(w.state==='cook'?0.15:0.3)*k*dt;
     const [r,c0]=wCell(w);
+    {const dr=roomAt(r,c0);if(dr&&dr.deco&&w.state!=='surface'){if(dr.deco.taulu)n.ilo+=.35*dt;if(dr.deco.kruunu)n.ilo+=.7*dt;}
+     if(w.state==='surface'&&fountains().some(f=>Math.abs(w.x-(f+.5))<2.5)){n.ilo+=1.5*dt;if(!w.thought&&rnd()<dt*.15)think(w,'😊',1.5);}}
     if(flooded(r)&&w.state!=='ride'){n.ilo-=1.5*dt;n.terveys-=0.7*dt;}
     // vessahätä ja sotkut
     if(!w.baby){w.wc=(w.wc||0)+.9*k*dt;
@@ -1236,13 +1261,37 @@ function drawSurface(){
   drawWells();
   drawExits();
   drawCrows();
+  drawFountains();
+}
+function drawTreasures(){
+  for(const t of treasures()){const x=t.c+.5,y=SKY+t.r+.72,tw=Math.sin(T*3+t.id)*.5+.5;
+    const gl=ctx.createRadialGradient(x,y,.02,x,y,.42);gl.addColorStop(0,`rgba(255,236,150,${.55+.3*tw})`);gl.addColorStop(1,'rgba(255,236,150,0)');ctx.fillStyle=gl;ctx.beginPath();ctx.arc(x,y,.42,0,7);ctx.fill();
+    ctx.font='.36px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(TREAS[t.k].ic,x,y-.04);
+    ctx.fillStyle='#fff';for(let i=0;i<2;i++){const a=T*2+t.id+i*3,sx=x+Math.cos(a)*.24,sy=y-.12+Math.sin(a*1.3)*.12,r=.03*(Math.sin(T*6+i*2+t.id)*.5+.5);ctx.beginPath();ctx.moveTo(sx,sy-r*2);ctx.lineTo(sx+r*.6,sy);ctx.lineTo(sx,sy+r*2);ctx.lineTo(sx-r*.6,sy);ctx.closePath();ctx.fill();}
+    ctx.textAlign='left';ctx.textBaseline='alphabetic';}
+}
+function drawFountains(){
+  if(tool==='suihku'){ctx.save();ctx.setLineDash([.08,.08]);ctx.strokeStyle='rgba(180,230,255,.7)';ctx.lineWidth=.03;
+    for(let c=0;c<COLS;c++)if(fountainOK(c)){ctx.beginPath();ctx.roundRect(c+.1,SKY-.9,.8,.8,.2);ctx.stroke();}ctx.restore();}
+  for(const [i,c] of fountains().entries()){const x=c+.5,y=SKY-.04;ctx.save();ctx.translate(x,y);ink(.025);
+    // allas
+    ctx.fillStyle='#b9c2c9';ctx.beginPath();ctx.moveTo(-.46,-.26);ctx.lineTo(.46,-.26);ctx.lineTo(.38,0);ctx.lineTo(-.38,0);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#6fb7e6';ctx.beginPath();ctx.ellipse(0,-.26,.44,.06,0,0,7);ctx.fill();ctx.stroke();
+    // pilari ja ylempi malja
+    ctx.fillStyle='#c9d1d7';ctx.fillRect(-.05,-.62,.1,.36);ctx.strokeRect(-.05,-.62,.1,.36);
+    ctx.beginPath();ctx.moveTo(-.2,-.62);ctx.quadraticCurveTo(0,-.5,.2,-.62);ctx.closePath();ctx.fill();ctx.stroke();
+    // vesisuihku ja pisarat
+    ctx.strokeStyle='rgba(120,190,240,.9)';ctx.lineWidth=.035;ctx.beginPath();ctx.moveTo(0,-.64);ctx.lineTo(0,-.86);ctx.stroke();
+    ctx.fillStyle='#8fd0ff';for(let k=0;k<6;k++){const ph=(T*1.2+k/6+i*.37)%1,sd=k%2?1:-1,dx=sd*(.05+ph*.32),dy=-.86+ph*.62-Math.sin(ph*Math.PI)*.18;ctx.beginPath();ctx.arc(dx,dy,.028,0,7);ctx.fill();}
+    if(SNOW>0){ctx.globalAlpha=SNOW;ctx.fillStyle='#f6f9fd';ctx.beginPath();ctx.ellipse(0,-.27,.42,.05,0,0,7);ctx.fill();ctx.globalAlpha=1;}
+    ctx.restore();}
 }
 function drawCrows(){
   const show=tool==='pelatin'||(G.ev&&G.ev.type==='rastas');
   if(show){ctx.save();for(const c of crows()){const x=c+.5;ctx.fillStyle='rgba(255,246,200,.16)';ctx.strokeStyle='rgba(255,240,170,.75)';ctx.lineWidth=.035;ctx.setLineDash([.12,.1]);
     ctx.beginPath();ctx.ellipse(x,SKY-.05,CROW_R,2.1,0,Math.PI,0);ctx.fill();ctx.stroke();}ctx.restore();}
   if(tool==='pelatin'&&unlocked('pelatin')){ctx.save();ctx.setLineDash([.08,.08]);ctx.strokeStyle='rgba(255,240,180,.55)';ctx.lineWidth=.03;
-    for(let c=0;c<COLS;c++)if(!openTop(c)&&!crows().some(cc=>Math.abs(cc-c)<2)){ctx.beginPath();ctx.roundRect(c+.15,SKY-1.45,.7,1.35,.2);ctx.stroke();}ctx.restore();}
+    for(let c=0;c<COLS;c++)if(!openTop(c)&&!crows().some(cc=>Math.abs(cc-c)<2)&&!fountains().some(f=>Math.abs(f-c)<2)){ctx.beginPath();ctx.roundRect(c+.15,SKY-1.45,.7,1.35,.2);ctx.stroke();}ctx.restore();}
   for(const [i,c] of crows().entries()){const x=c+.5,y=SKY-.06,sw=Math.sin(T*1.3+i*2)*.04;ctx.save();ctx.translate(x,y);ctx.strokeStyle=INK;ctx.lineWidth=.025;ctx.lineJoin='round';
     ctx.fillStyle='#8a5a30';ctx.beginPath();ctx.rect(-.035,-1.15,.07,1.15);ctx.fill();ctx.stroke(); // tolppa
     ctx.rotate(sw);
@@ -1351,8 +1400,9 @@ function drawRoom(rm){
   if(W>=3)bigHall(x,y,W,def.wall); // iso sali: kaariholvi ja puupilarit
   ctx.fillStyle='rgba(255,255,255,.12)';for(let i=0;i<Math.round(W*4);i++)for(let j=0;j<3;j++){ctx.beginPath();ctx.arc(x+.2+i*.23+(j%2)*.11,y+.35+j*.17,.022,0,7);ctx.fill();}
   const fy=y+.93;ink(.03);
-  const lit=rm.use>0||rm.cook?1:.45;
+  const lit=rm.use>0||rm.cook||(rm.deco&&rm.deco.kruunu)?1:.45;
   FURN[rm.type](x,y,fy,rm,W);
+  if(rm.deco)drawDeco(rm,x,y,W);
   const dm=(rm.dmg||0)/100;
   if(dm>0){ctx.fillStyle=`rgba(60,35,20,${.45*dm})`;ctx.fillRect(x,y,W,1);
     const cr=mulberry(rm.id*7);ink(.022,'rgba(30,18,10,.85)');
@@ -1364,6 +1414,20 @@ function drawRoom(rm){
   label(def.name.toUpperCase(),x+W/2-(W>=3?.35:0),y+.02,rm.id);
   if(broken(rm)){ctx.save();ctx.translate(x+W/2+.3,y+.55);ctx.rotate(-.15);ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.roundRect(-.32,-.12,.64,.24,.05);ctx.fill();ink(.025);ctx.stroke();
     ctx.fillStyle='#fff';ctx.font=`.17px 'Patrick Hand',cursive`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('RIKKI 🔧',0,.01);ctx.restore();ctx.textAlign='left';ctx.textBaseline='alphabetic';}
+}
+function drawDeco(rm,x,y,W){
+  if(rm.deco.taulu){const px=x+.42,py=y+.3,cr=mulberry(rm.id*13);
+    ctx.fillStyle='#c99a2e';ctx.fillRect(px-.03,py-.03,.38,.3);ink(.022);ctx.strokeRect(px-.03,py-.03,.38,.3);
+    ctx.fillStyle='#bfe3f5';ctx.fillRect(px,py,.32,.24);ctx.fillStyle='#7cc36a';ctx.beginPath();ctx.moveTo(px,py+.24);ctx.quadraticCurveTo(px+.12,py+.1,px+.32,py+.2);ctx.lineTo(px+.32,py+.24);ctx.closePath();ctx.fill();
+    ctx.fillStyle=['#ffcf3f','#f39aa5','#e9a5d8'][Math.floor(cr()*3)];ctx.beginPath();ctx.arc(px+.24,py+.07,.04,0,7);ctx.fill();
+    ctx.strokeStyle='#f39aa5';ctx.lineWidth=.03;ctx.beginPath();ctx.moveTo(px+.06,py+.19);ctx.quadraticCurveTo(px+.1,py+.13,px+.14,py+.18);ctx.stroke();}
+  if(rm.deco.kruunu){ctx.save();ctx.translate(x+W-.62,y);ctx.scale(1.4,1.4);ctx.translate(-(x+W-.62),-y);const cx=x+W-.62,cy=y+.3;
+    const gl=ctx.createRadialGradient(cx,cy+.05,.02,cx,cy+.05,.6);gl.addColorStop(0,'rgba(255,245,200,.55)');gl.addColorStop(1,'rgba(255,245,200,0)');ctx.fillStyle=gl;ctx.beginPath();ctx.arc(cx,cy+.05,.6,0,7);ctx.fill();
+    ink(.018,'#8a6a2a');ctx.beginPath();ctx.moveTo(cx,y);ctx.lineTo(cx,cy-.06);ctx.stroke();
+    ctx.fillStyle='#d8b04a';ctx.beginPath();ctx.ellipse(cx,cy,.2,.045,0,0,7);ctx.fill();ink(.02);ctx.stroke();
+    for(let i=-2;i<=2;i++){const dx=i*.085,len=.1+(2-Math.abs(i))*.04,tw=Math.sin(T*4+i+rm.id)*.5+.5;
+      ctx.fillStyle=`rgba(${190+40*tw},${230+20*tw},255,.95)`;ctx.beginPath();ctx.moveTo(cx+dx,cy+.03);ctx.lineTo(cx+dx+.03,cy+.03+len*.6);ctx.lineTo(cx+dx,cy+.03+len);ctx.lineTo(cx+dx-.03,cy+.03+len*.6);ctx.closePath();ctx.fill();ink(.012,'rgba(60,80,110,.8)');ctx.stroke();}
+    ctx.fillStyle='#fff';const a=T*1.7+rm.id;ctx.beginPath();ctx.arc(cx+Math.cos(a)*.22,cy+.12+Math.sin(a*1.4)*.08,.018,0,7);ctx.fill();ctx.restore();}
 }
 function bigHall(x,y,W,wall){ // kolmen ruudun sali: holvikaaret ja puupilarit erottavat sen tavallisesta huoneesta
   ctx.fillStyle=shade(wall,-.18);ctx.globalAlpha=.55;
@@ -1400,6 +1464,17 @@ function bigCrates(x,fy,n){ // suurvaraston kolmas ruutu: puulaatikkopino, täyt
 function shade(hex,k){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;const f=v=>clamp(Math.round(v*(1+k)),0,255);return`rgb(${f(r)},${f(g)},${f(b)})`;}
 function box(x,y,w,h,fill,r=.03){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill();ink(.03);ctx.stroke();}
 const FURN={
+  aarre(x,y,fy){const n=G.aarteet||0;
+    // arkku
+    box(x+.2,fy-.34,.62,.34,'#9a5d2c',.04);ctx.fillStyle='#d8b04a';ctx.fillRect(x+.2,fy-.24,.62,.05);ctx.fillRect(x+.47,fy-.34,.08,.34);ink(.02);ctx.strokeRect(x+.2,fy-.24,.62,.05);
+    ctx.fillStyle='#b8752f';ctx.beginPath();ctx.moveTo(x+.2,fy-.34);ctx.quadraticCurveTo(x+.51,fy-.62,x+.82,fy-.34);ctx.closePath();ctx.fill();ink(.025);ctx.stroke();
+    // kultakasa arkun vieressä kasvaa aarteiden mukana
+    const h=Math.min(.45,.06+n*.012);ctx.fillStyle='#f2c94c';ctx.beginPath();ctx.moveTo(x+.9,fy);ctx.quadraticCurveTo(x+1.22,fy-h*2,x+1.55,fy);ctx.closePath();ctx.fill();ink(.022);ctx.stroke();
+    ctx.fillStyle='#ffe58a';for(let i=0;i<Math.min(9,2+Math.floor(n/3));i++){const cr=mulberry(i*7+3),cx=x+1+cr()*.45,cy=fy-.03-cr()*h*1.2;ctx.beginPath();ctx.ellipse(cx,cy,.05,.025,0,0,7);ctx.fill();ink(.012);ctx.stroke();}
+    // jalusta ja jalokivi
+    box(x+1.62,fy-.4,.22,.4,'#c9b8a0',.02);const tw=Math.sin(T*3)*.5+.5;ctx.font='.26px sans-serif';ctx.textAlign='center';ctx.fillText('💎',x+1.73,fy-.46);
+    ctx.fillStyle=`rgba(255,255,255,${.4+.5*tw})`;ctx.beginPath();ctx.arc(x+1.8,fy-.6,.025,0,7);ctx.fill();ctx.textAlign='left';
+    ctx.font=`.17px 'Patrick Hand',cursive`;ctx.fillStyle=INK;ctx.textAlign='center';ctx.fillText(n+' 💰',x+1.22,y+.38);ctx.textAlign='left';},
   ulos(x,y,fy){
     const g=ctx.createLinearGradient(0,y,0,fy);g.addColorStop(0,'rgba(255,240,170,.55)');g.addColorStop(1,'rgba(255,240,170,0)');ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(x+.7,y);ctx.lineTo(x+1.3,y);ctx.lineTo(x+1.55,fy);ctx.lineTo(x+.45,fy);ctx.closePath();ctx.fill();
     ctx.strokeStyle='#8a5a30';ctx.lineWidth=.05;ctx.beginPath();for(const d of [-.2,.2]){ctx.moveTo(x+1+d,y);ctx.lineTo(x+1+d,fy);}ctx.stroke();
@@ -1661,6 +1736,7 @@ function drawWorm(w,sel,ov){
   if(isNight()&&w.state!=='sleep'&&w.state!=='faint'&&!w.baby){const hx=head.x-d*s*.1,hy=head.y-s*1.55;ctx.strokeStyle='#333';ctx.lineWidth=.022;ctx.beginPath();ctx.ellipse(head.x,head.y-s*.9,s*1.3,s*.45,lean,Math.PI,0);ctx.stroke();
     ctx.fillStyle=w.state==='sleep'?'#bbb':'#ffe066';ctx.beginPath();ctx.arc(hx+d*s*.3,hy,s*.42,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=.014;ctx.stroke();}
   if(w.carry){ctx.save();ctx.translate(head.x+d*s*1.4,head.y+s*.4);ctx.rotate(d*.4);ctx.beginPath();ctx.moveTo(-.16,0);ctx.bezierCurveTo(-.06,-.1,.08,-.09,.16,0);ctx.bezierCurveTo(.08,.09,-.06,.1,-.16,0);ctx.fillStyle='#7fd14e';ctx.fill();ctx.strokeStyle='#2a5a12';ctx.lineWidth=.02;ctx.stroke();ctx.restore();}
+  if(w.carryT&&TREAS[w.carryT]){ctx.save();ctx.translate(head.x+d*s*1.5,head.y+s*.2);ctx.font='.26px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(TREAS[w.carryT].ic,0,0);ctx.restore();}
   ctx.restore();
   if(!ov)drawThought(w,X+d*s*.5,Y-H0-.05,d);
 }
@@ -1815,7 +1891,8 @@ function drawPreview(){
     else if(tool==='hissi'){if(r===0&&SHAFT<0&&unlocked('hissi')&&liftOK(c)){ctx.beginPath();ctx.roundRect(c+.12,SKY+.12,.76,.76,.2);ctx.stroke();}}
     else if(tool==='ulos'){if(ulosOK(r,c)){ctx.beginPath();ctx.roundRect(c+.12,SKY+r+.12,1.76,.76,.25);ctx.stroke();}}
     else if(ROOMS[tool]&&!unlocked(tool)){}
-    else if(tool==='pelatin'){}
+    else if(tool==='pelatin'||tool==='suihku'){}
+    else if(tool==='taulu'||tool==='kruunu'){const rm=roomAt(r,c);if(rm&&rm.type!=='ulos'&&!(rm.deco&&rm.deco[tool])){ctx.beginPath();ctx.roundRect(rm.c+.1,SKY+rm.r+.1,RW(rm)-.2,.8,.25);ctx.stroke();}}
     else if(tool==='tikkaat'){if(hasFloor(r,c)&&!cell.lad){ctx.beginPath();ctx.roundRect(c+.3,SKY+r+.72,.4,.44,.12);ctx.stroke();}}
     else if(tool==='kaiva'){if(cell.t==='soil'&&r>0&&(adjWalk(r,c)||acrossWell(r,c)||wellAt(r-1,c))){ctx.beginPath();ctx.roundRect(c+.12,SKY+r+.12,.76,.76,.2);ctx.stroke();}}
     else if(ROOMS[tool]){const W=TW(tool),c0=W===3?c-1:c;if(placeOK(r,c0,W)){ctx.beginPath();ctx.roundRect(c0+.12,SKY+r+.12,W-.24,.76,.25);ctx.stroke();}}
@@ -1862,6 +1939,7 @@ function render(){
   if(rain.length){ink(.025,'rgba(225,238,255,.85)');ctx.beginPath();for(const d of rain){if(d.y>SKY){ctx.moveTo(d.x,d.y);ctx.lineTo(d.x+.02,d.y-.08);}else{ctx.moveTo(d.x,d.y);ctx.lineTo(d.x+.05,d.y-.22);}}ctx.stroke();}
   drawLight(nightAmt());
   for(const p of parts){ctx.globalAlpha=clamp(p.t*2,0,1);ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,.045,0,7);ctx.fill();}ctx.globalAlpha=1;
+  drawTreasures();
   for(const f of floats){ctx.globalAlpha=clamp(f.t,0,1);ctx.font=`.24px 'Patrick Hand',cursive`;ctx.textAlign='center';ctx.lineWidth=.06;ctx.strokeStyle='rgba(255,255,255,.9)';ctx.strokeText(f.txt,f.x,f.y);ctx.fillStyle=f.col;ctx.fillText(f.txt,f.x,f.y);ctx.textAlign='left';}ctx.globalAlpha=1;
   // otsikko kuin piirroksessa
   ctx.save();ctx.translate(CX-3.8,.15);ctx.rotate(-.02);ctx.font=`.36px 'Patrick Hand',cursive`;const tbw=ctx.measureText('MATOTALO').width;ctx.font=`.2px 'Patrick Hand',cursive`;const tbw2=ctx.measureText('– YHTEINEN').width;ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();ctx.roundRect(0,0,tbw+tbw2+.35,.52,.06);ctx.fill();ink(.03);ctx.stroke();
@@ -1882,15 +1960,15 @@ function render(){
 // ====== Työkalut ja syöte ======
 let tool='katso',selWorm=0,paused=false,speed=1;
 const TOOLS=[{id:'katso',ic:'👆',name:'Valitse'},{id:'pyydaLehti',ic:'🍃',name:'Hae\nlehtiä',act:true},{id:'pyydaKokki',ic:'🍳',name:'Kokkaa',act:true},{id:'kaiva',ic:'⛏️',name:'Kaiva',cost:1},{id:'tikkaat',ic:'🪜',name:'Tikkaat',cost:LADDER_COST},{id:'paikkaa',ic:'🧱',name:'Korjaa',cost:1},{id:'purku',ic:'🧹',name:'Pura'},
-  ...Object.entries(ROOMS).map(([id,d])=>({id,ic:d.ic,name:d.name.replace('huone','-\nhuone').replace('Salainen -\nhuone','Salainen\nhuone').replace('Ruokakomero','Ruoka-\nkomero').replace('Uloskäytävä','Ulos-\nkäytävä').replace('Sisäänkäynti','Sisään-\nkäynti').replace('Suurkeittiö','Suur-\nkeittiö').replace('Suurvarasto','Suur-\nvarasto').replace('Linnunpelätin','Linnun-\npelätin'),cost:d.cost,room:true}))];
-const TOOL_GROUPS=[['Työkalut',['katso','kaiva','tikkaat','paikkaa','purku']],['Pyydä madoilta',['pyydaLehti','pyydaKokki']],['Perusasiat',['ulos','keittio','makuu','kaivo','kylpy','komero','wc','lasten']],['Hyvinvointi ja turva',['laakari','olo','askartelu','takka','salainen','pelatin']],['Isot rakennukset 🔓',['hissi','suurkeittio','makuusali','suurvarasto']]];
+  ...Object.entries(ROOMS).map(([id,d])=>({id,ic:d.ic,name:d.name.replace('huone','-\nhuone').replace('Salainen -\nhuone','Salainen\nhuone').replace('Ruokakomero','Ruoka-\nkomero').replace('Uloskäytävä','Ulos-\nkäytävä').replace('Sisäänkäynti','Sisään-\nkäynti').replace('Suurkeittiö','Suur-\nkeittiö').replace('Suurvarasto','Suur-\nvarasto').replace('Linnunpelätin','Linnun-\npelätin').replace('Aarrekammio','Aarre-\nkammio').replace('Kristallikruunu','Kristalli-\nkruunu').replace('Suihkulähde','Suihku-\nlähde'),cost:d.gem?0:d.cost,gem:d.gem,room:true}))];
+const TOOL_GROUPS=[['Työkalut',['katso','kaiva','tikkaat','paikkaa','purku']],['Pyydä madoilta',['pyydaLehti','pyydaKokki']],['Perusasiat',['ulos','keittio','makuu','kaivo','kylpy','komero','wc','lasten']],['Hyvinvointi ja turva',['laakari','olo','askartelu','takka','salainen','pelatin']],['Isot rakennukset 🔓',['hissi','suurkeittio','makuusali','suurvarasto']],['Aarteet ✨',['aarre','taulu','kruunu','suihku']]];
 function buildTools(){
   const el=document.getElementById('tools');el.innerHTML='';
   const seen=new Set(TOOL_GROUPS.flatMap(g=>g[1])),groups=[...TOOL_GROUPS,['Muut',TOOLS.map(t=>t.id).filter(id=>!seen.has(id)&&id!=='kellari')]]; // vanhaa kellaria ei enää rakenneta, vanhat voi purkaa
   for(const [title,ids] of groups)for(const [i,id] of ids.entries()){const t=TOOLS.find(x=>x.id===id);if(!t)continue;
     if(i===0){const h=document.createElement('div');h.className='tgrp';h.innerHTML='<span>'+title+'</span>';el.appendChild(h);}
     const b=document.createElement('button');b.className='tool'+(t.id===tool?' sel':'');b.dataset.id=t.id;
-    b.innerHTML=`<span class="ic">${wellIc(t.ic)}</span>${t.name.replace('\n','<br>')}${t.cost?`<span class="c">${t.cost} 🟫</span>`:''}`;
+    b.innerHTML=`<span class="ic">${wellIc(t.ic)}</span>${t.name.replace('\n','<br>')}${t.gem?`<span class="c">${t.gem} 💰</span>`:t.cost?`<span class="c">${t.cost} 🟫</span>`:''}`;
     b.onclick=()=>{sfx('click');if(t.act){request(t.id);return;}if(!unlocked(t.id)){const d=ROOMS[t.id];toast(`<span class="t">🔒 ${d.ic} ${d.name}</span><br>Avautuu, kun talossa on asunut ${UNLOCK[t.id]} matoa (nyt enimmillään ${G.maxWorms||0}). Pidä madot tyytyväisinä, niin lastenhuoneeseen syntyy vauvoja.<br><small>${d.desc}</small>`);return;}tool=t.id;selWorm=0;document.querySelectorAll('.tool').forEach(x=>x.classList.toggle('sel',x.dataset.id===tool));toolInfo();};el.appendChild(b);}
 }
 function checkUnlocks(){
@@ -1905,7 +1983,7 @@ function toolInfo(){
   else if(tool==='tikkaat')setInfo('<span class="t">🪜 Tikkaat</span> ('+LADDER_COST+' 🟫)<br>Päällekkäisten käytävien ja huoneiden välissä on lattia. Napauta lattiaa kohdasta, johon haluat tikkaat – madot kulkevat kerrosten väliä vain tikkaita pitkin. Napauta tikkaita uudelleen, jos haluat purkaa ne.');
   else if(tool==='paikkaa')setInfo('<span class="t">🧱 Korjaa</span><br>Napauta käytävää täyttääksesi sen mullalla (1 🟫) – myyrän käytävät (oranssit reunat) päästävät sadevettä sisään. Napauta rikkinäistä huonetta korjataksesi sen.');
   else if(tool==='purku')setInfo('<span class="t">🧹 Pura</span><br>Napauta huonetta purkaaksesi sen. Saat puolet mullasta takaisin.');
-  else{const d=ROOMS[tool];setInfo(`<span class="t">${d.ic} ${d.name}</span> (${d.cost} 🟫)<br>${d.desc}<br><small>${d.hint||'Napauta kahden ruudun kokoista paikkaa käytävän vieressä.'}</small>`);}
+  else{const d=ROOMS[tool];setInfo(`<span class="t">${d.ic} ${d.name}</span> (${d.gem?d.gem+' 💰':d.cost+' 🟫'})<br>${d.desc}<br><small>${d.hint||'Napauta kahden ruudun kokoista paikkaa käytävän vieressä.'}</small>`);}
 }
 let infoLock=0;
 const wellIc=h=>String(h).replaceAll('⟦K⟧',WELL_IC);
@@ -1958,10 +2036,26 @@ function tap(px,py){
   const crowHit=r<=0&&y>SKY-1.6?crows().find(cc=>Math.abs(x-(cc+.5))<.6):undefined;
   if(tool==='katso'&&crowHit!==undefined&&!G.worms.some(w=>Math.hypot(x-w.x,y-w.y)<.85)){const d=ROOMS.pelatin;toast(`<span class="t">${d.ic} ${d.name}</span><br>${d.desc}`);return;}
   if(tool==='purku'&&crowHit!==undefined){G.crows=crows().filter(cc=>cc!==crowHit);const back=Math.floor(ROOMS.pelatin.cost/2);addMulta(back);sfx('thud');floats.push({x:crowHit+.5,y:SKY-1,txt:'+'+back+' 🟫',t:1.4,col:'#5a3a24'});return;}
+  const fHit=r<=0&&y>SKY-1.2?fountains().find(f=>Math.abs(x-(f+.5))<.6):undefined;
+  if(tool==='katso'&&fHit!==undefined&&!G.worms.some(w=>Math.hypot(x-w.x,y-w.y)<.85)){const d=ROOMS.suihku;toast(`<span class="t">${d.ic} ${d.name}</span><br>${d.desc}`);return;}
+  if(tool==='purku'&&fHit!==undefined){G.fountains=fountains().filter(f=>f!==fHit);const back=Math.floor(ROOMS.suihku.gem/2);G.aarteet=(G.aarteet||0)+back;sfx('thud');floats.push({x:fHit+.5,y:SKY-1,txt:'+'+back+' 💰',t:1.4,col:'#b8860b'});return;}
+  if(tool==='suihku'){const gem=ROOMS.suihku.gem;
+    if(r>0||c<0||c>=COLS){toast('⛲ Suihkulähde rakennetaan nurmelle – napauta nurmea tai taivasta.');return;}
+    if(!fountainOK(c)){toast('⛲ Tähän ei mahdu – kohdalla on aukko, pelätin tai toinen suihkulähde.');return;}
+    if((G.aarteet||0)<gem){toast(`Aarteet eivät riitä (${gem} 💰, sinulla ${G.aarteet||0}). Kaiva käytäviä – maan alta löytyy aarteita, ja madot kantavat ne aarrekammioon.`);return;}
+    G.aarteet-=gem;fountains().push(c);sfx('fanfare',1);floats.push({x:c+.5,y:SKY-1.3,txt:'Suihkulähde!',t:1.6,col:'#2a6fb0'});
+    for(let i=0;i<18;i++)parts.push({x:c+.5,y:SKY-.6,vx:(rnd()-.5)*3,vy:-rnd()*3,t:.8,col:['#8fd0ff','#fff','#ffe066'][i%3]});return;}
+  if(tool==='taulu'||tool==='kruunu'){const d=ROOMS[tool],rm=roomAt(r,c);
+    if(!rm||rm.type==='ulos'){toast(`${d.ic} Napauta huonetta, johon haluat: ${d.name.toLowerCase()}.`);return;}
+    if(rm.deco&&rm.deco[tool]){toast(`${d.ic} Tässä huoneessa on jo ${d.name.toLowerCase()}.`);return;}
+    if((G.aarteet||0)<d.gem){toast(`Aarteet eivät riitä (${d.gem} 💰, sinulla ${G.aarteet||0}). Kaiva käytäviä – maan alta löytyy aarteita, ja madot kantavat ne aarrekammioon.`);return;}
+    G.aarteet-=d.gem;rm.deco=rm.deco||{};rm.deco[tool]=true;sfx('chime',1);floats.push({x:RCX(rm),y:SKY+rm.r+.3,txt:d.name+'!',t:1.6,col:'#7a3fb0'});
+    for(let i=0;i<16;i++)parts.push({x:RCX(rm),y:SKY+rm.r+.4,vx:(rnd()-.5)*3,vy:-rnd()*2.5,t:.8,col:['#ffe066','#fff','#c9a0ff'][i%3]});return;}
   if(tool==='pelatin'){
     if(!unlocked('pelatin')){toast(`🔒 ${ROOMS.pelatin.name} avautuu, kun talossa on asunut ${UNLOCK.pelatin} matoa.`);return;}
     if(r>0||c<0||c>=COLS){toast('🧑‍🌾 Pelätin rakennetaan nurmelle – napauta nurmea tai taivasta.');return;}
     if(openTop(c)){toast('🧑‍🌾 Tähän ei voi rakentaa – kohdalla on aukko nurmikatossa.');return;}
+    if(fountains().some(f=>Math.abs(f-c)<2)){toast('🧑‍🌾 Tässä on suihkulähde – rakenna pelätin vähän kauemmas.');return;}
     if(crows().some(cc=>Math.abs(cc-c)<2)){toast('🧑‍🌾 Tässä on jo pelätin vieressä. Rakenna seuraava vähän kauemmas, niin suojattu alue kasvaa.');return;}
     if(G.multa<ROOMS.pelatin.cost){toast(`Multa ei riitä (${ROOMS.pelatin.cost} 🟫).`);return;}
     G.multa-=ROOMS.pelatin.cost;crows().push(c);sfx('build');floats.push({x:c+.5,y:SKY-1.5,txt:'Pelätin!',t:1.5,col:'#2a2320'});
@@ -2065,14 +2159,17 @@ function tap(px,py){
 }
 const ptrs=new Map();let drag=null,pinch=null;
 function digFind(r,c,win){
-  if(rnd()>.1)return;
+  if(rnd()>.13)return;
   sfx('sparkle');
   const x=c+.5,y=SKY+r+.35,k=rnd(),kit=kitchens().find(q=>!broken(q)&&q.food<=fcap(q)-2);
   for(let i=0;i<12;i++)parts.push({x,y:y+.15,vx:(rnd()-.5)*3,vy:-rnd()*3,t:.9,col:['#ffe066','#fff','#9be7ff'][i%3]});
-  if(k<.4){addMulta(8);G.xp+=8;floats.push({x,y,txt:'💎 Kide! +8 🟫',t:2.2,col:'#7a3fb0'});}
-  else if(k<.7&&kit){kit.food+=2;floats.push({x,y,txt:'🌰 Tammenterho! +2 🍲',t:2.2,col:'#8a5a2b'});}
+  if(k<.65||!(kit||wellCols().length)){ // aarre jää käytävään, madot kantavat sen aarrekammioon
+    const kk=r>=6&&rnd()<.4?'kide':(q=>q<.42?'kolikko':q<.77?'simpukka':'ruukku')(rnd()),T0=TREAS[kk];
+    treasures().push({id:(G.nextId++),r,c,k:kk,claim:0});G.xp+=5;floats.push({x,y,txt:T0.ic+' '+T0.n+'!',t:2.2,col:'#b8860b'});
+    if(!countRooms('aarre'))toastOnce('aarre','<span class="t">✨ Löytyi aarre: '+T0.ic+' '+T0.n.toLowerCase()+'!</span><br>Rakenna 💰 Aarrekammio, niin madot kantavat aarteet sinne talteen. Aarteilla voi rakentaa hienoja juttuja.');}
+  else if(k<.83&&kit){kit.food+=2;floats.push({x,y,txt:'🌰 Tammenterho! +2 🍲',t:2.2,col:'#8a5a2b'});}
   else if(addWellWater(3)){floats.push({x,y,txt:'💧 Lähde! +3 💧',t:2.2,col:'#2a6fb0'});}
-  else{addMulta(5);G.xp+=5;floats.push({x,y,txt:'🪙 Kolikko! +5 🟫',t:2.2,col:'#b8860b'});}
+  else{addMulta(5);G.xp+=5;floats.push({x,y,txt:'🌰 Siemen! +5 🟫',t:2.2,col:'#8a5a2b'});}
 }
 function drawPiles(){
   if(!G.piles)return;
@@ -2125,7 +2222,7 @@ function wormInfo(){
 }
 function updateHUD(){
   const $=id=>document.getElementById(id);
-  $('sMulta').textContent=Math.floor(G.multa)+'/'+multaCap();$('stMulta').classList.toggle('low',G.multa>=multaCap());{const ks=kitchens(),ps=G.rooms.filter(r=>isStore(r.type));$('sLehdet').textContent=G.rooms.reduce((a,k)=>a+(k.leaves||0),0)+'/'+(ks.reduce((a,k)=>a+kcap(k),0)+ps.reduce((a,k)=>a+pcap(k),0));$('sRuoka').textContent=ks.reduce((a,k)=>a+k.food,0)+'/'+ks.reduce((a,k)=>a+fcap(k),0);}$('sAika').textContent=isNight()?'🌙':dayT()>DAYLIGHT-15?'🌇':dayT()<10?'🌅':'☀️';{const se=SEASONS[seasonI()],pc=(DAYLIGHT/DAY*100).toFixed(1);$('sPaiva').textContent=se.ic+' '+se.name+' '+(Math.floor(seasonT()/DAY)+1)+'/'+SEASON_DAYS;$('sPaiva').parentNode.title='Päivä '+(Math.floor(G.time/DAY)+1)+', vuosi '+(Math.floor(G.time/SLEN/4)+1);{const dn=Math.floor(G.time/DAY)+1,yr=Math.floor(G.time/SLEN/4)+1;$('sDay').textContent='Päivä '+dn;$('stDay').title=`Peliä on pelattu ${dn} päivää`+(yr>1?` – menossa ${yr}. vuosi`:'');}$('sDayB').style.background=`linear-gradient(90deg,#ffcf3f 0 ${pc}%,#27336e ${pc}% 100%)`;}$('sDayM').style.left=(dayT()/DAY*100).toFixed(1)+'%';$('sVesi').textContent=Math.floor(G.vesi)+'/'+waterCap();
+  $('sMulta').textContent=Math.floor(G.multa)+'/'+multaCap();$('stMulta').classList.toggle('low',G.multa>=multaCap());{const ks=kitchens(),ps=G.rooms.filter(r=>isStore(r.type));$('sLehdet').textContent=G.rooms.reduce((a,k)=>a+(k.leaves||0),0)+'/'+(ks.reduce((a,k)=>a+kcap(k),0)+ps.reduce((a,k)=>a+pcap(k),0));$('sRuoka').textContent=ks.reduce((a,k)=>a+k.food,0)+'/'+ks.reduce((a,k)=>a+fcap(k),0);}$('sAika').textContent=isNight()?'🌙':dayT()>DAYLIGHT-15?'🌇':dayT()<10?'🌅':'☀️';{const se=SEASONS[seasonI()],pc=(DAYLIGHT/DAY*100).toFixed(1);$('sPaiva').textContent=se.ic+' '+se.name+' '+(Math.floor(seasonT()/DAY)+1)+'/'+SEASON_DAYS;$('sPaiva').parentNode.title='Päivä '+(Math.floor(G.time/DAY)+1)+', vuosi '+(Math.floor(G.time/SLEN/4)+1);{const dn=Math.floor(G.time/DAY)+1,yr=Math.floor(G.time/SLEN/4)+1;$('sDay').textContent='Päivä '+dn;{const sh=(G.aarteet||0)>0||countRooms('aarre')>0||treasures().length>0;$('stAarre').style.display=sh?'':'none';$('sAarre').textContent=G.aarteet||0;}$('stDay').title=`Peliä on pelattu ${dn} päivää`+(yr>1?` – menossa ${yr}. vuosi`:'');}$('sDayB').style.background=`linear-gradient(90deg,#ffcf3f 0 ${pc}%,#27336e ${pc}% 100%)`;}$('sDayM').style.left=(dayT()/DAY*100).toFixed(1)+'%';$('sVesi').textContent=Math.floor(G.vesi)+'/'+waterCap();
   $('sMadot').textContent=G.worms.length;
   {const n=G.worms.length,beds=G.rooms.filter(r=>isBedT(r.type)).reduce((a,r)=>a+bedCap(r),0),hid=countRooms('salainen')*4;$('sBed').textContent=n+'/'+beds;$('stBed').classList.toggle('low',n>beds);$('sHide').textContent=n+'/'+hid;$('stHide').classList.toggle('low',hid>0&&n>hid);}
   const avg=G.worms.reduce((s,w)=>s+avgNeeds(w),0)/Math.max(1,G.worms.length);
@@ -2222,6 +2319,7 @@ function help(first){
   <li>⟦K⟧ <b>Kaivo</b> on aukko nurmikatossa, josta sade sataa sisään. Syvennä sitä ⛏️ kaivamalla sen alta. Kaivon vesi on matojen vesivarasto: se vähenee käytössä ja hitaasti itsestään. Syvälle kaivettuun kaivoon tihkuu vähän <b>pohjavettä</b>, mutta sadevettäkin tarvitaan. Älä kaiva käytävää kaivon viereen – vesi valuu sisään!</li>
   <li>💧 Madot kuivuvat, varsinkin kuivalla kaudella ☀️. <b>Kylpyhuone</b> kostuttaa ne, mutta kuluttaa vesivarastoa.</li>
   <li>🐦 Rastas nokkii pinnalla lehtiä hakevia matoja. 🐾 Myyrä tulee nurmea pitkin, matojen sisäänkäynnistä tai kaivautuu esiin talon vierestä ja saalistaa lähintä matoa – rakenna <b>salainen huone</b> piiloksi! Napauta molempia ajaaksesi ne pois.</li>
+  <li>✨ Kaivaessa maan alta löytyy <b>aarteita</b> 🪙🐚🏺💎 – syvältä jalokiviä. Rakenna 💰 <b>Aarrekammio</b>, niin madot kantavat aarteet sinne. Aarteilla rakennetaan hienoja juttuja: 🖼️ taulu ja ✨ kristallikruunu ilahduttavat huoneessa olevia matoja, ⛲ suihkulähde pinnalla kulkevia.</li>
   <li>🧑‍🌾 <b>Linnunpelätin</b> avautuu, kun talossa on asunut 5 matoa. Rastas ei laskeudu pelättimen lähelle, ja sen suojassa madot hakevat lehtiä rastaankin aikana. Rakenna useampi, niin suojattu alue kasvaa.</li>
   <li>🌱🌻🍂❄️ <b>Vuodenajat</b> vaihtuvat kahden päivän välein. Keväällä sataa, kesällä on kuivaa, ja syksyllä lehtiä putoaa paljon – kerää silloin ruokaa varastoon.</li>
   <li>❄️ Talvella madot pysyvät kotona ja elävät varastoilla. <b>Pakkanen</b> hiipii pinnalta maahan, ja madot palelevat pakkasrajan yläpuolella: kaiva syvemmälle tai rakenna <b>takkahuone</b> 🔥.</li>
