@@ -671,6 +671,7 @@ function updateWorm(w,dt){
     case 'ride':{const riders=G.worms.filter(o=>o.state==='ride');const i=riders.indexOf(w);w.slot=i;
       w.x=SHAFT+.5+(i-(riders.length-1)/2)*.17;w.y=SKY+lift.y+.62;break;}
     case 'surface':{
+      if(w.stun>0){w.stun-=dt;break;} // rastaan nokkaisu tainnuttaa hetkeksi
       const ex=w.exitX||SHAFT+.5,lifty=Math.abs(ex-SHAFT-.5)<.01,sy=SKY-.08,sp=dt*(w.baby?.85:1.1)*(insp(w)?1.3:1);
       // uloskäytävässä kiivetään ensin tikkaiden kohdalle ja sitten ylös
       const climb=(ty,k)=>Math.abs(w.x-ex)>.02?moveToward(w,ex,w.y,k):moveToward(w,ex,ty,k);
@@ -739,14 +740,15 @@ function startEvent(){
   if(G.forceEv){type=G.forceEv;G.forceEv=null;}
   if(seasonI()===3&&(type==='sade'||type==='kuivuus'))type='myyra';
   if(G.stats.firstDone!==true){type='sade';G.stats.firstDone=true;}
-  G.ev={type,phase:'warn',t:6};G.lastEv=type;
+  G.ev={type,phase:'warn',t:type==='rastas'?2:6};G.lastEv=type;
   showBanner(EVTXT[type].warn,'');
 }
 function activateEvent(){
   const e=G.ev;e.phase='active';e.t=EVTXT[e.type].dur;
   const sleepers=G.worms.filter(w=>w.state==='sleep').length;
   showBanner((sleepers&&e.type==='myyra'?'🚨 Hälytys! Nukkujat heräävät. ':'')+EVTXT[e.type].act,EVTXT[e.type].cls,0,EVTXT[e.type].short);
-  if(e.type==='rastas'){sfx('chirp');const sd=rnd()<.5?-1:1;bird={x:clamp(CX+.5+sd*9,-1,COLS+1),tx:CX-2.5+rnd()*6,hp:3,peckT:2.5,peck:0,leave:false,hop:0,dir:-sd,fly:true,arrive:true,alt:1};}
+  if(e.type==='rastas'){sfx('chirp');const sd=rnd()<.5?-1:1;const prey=G.worms.filter(w=>w.state==='surface').sort((a,b)=>Math.abs(a.x-(CX+.5+sd*9))-Math.abs(b.x-(CX+.5+sd*9)))[0];
+    bird={x:clamp(CX+.5+sd*9,-1,COLS+1),tx:prey?clamp(prey.x,.5,COLS-.5):CX-2.5+rnd()*6,hp:3,peckT:.4,peck:0,leave:false,hop:0,dir:-sd,fly:true,arrive:true,alt:1};}
   if(e.type==='myyra'){const left=rnd()<.5;let cl=COLS,ch=0;for(let rr=0;rr<ROWS;rr++)for(let cc=0;cc<COLS;cc++)if(walk(rr,cc)&&!G.grid[rr][cc].mole){cl=Math.min(cl,cc);ch=Math.max(ch,cc);} // talon rajat ilman myyrän omia käytäviä
     if(cl>ch){cl=CX-1;ch=CX+1;}
     const base={vy:0,step:null,falling:false,hp:4,hitT:0,leave:false,dir:left?1:-1,dig:0};
@@ -866,14 +868,14 @@ function updateEvents(dt){
     if(bird.leave){const sd=bird.x<CX+.5?-1:1;bird.x+=dt*6*sd;bird.dir=sd;bird.fly=true;if(bird.x<-2||bird.x>COLS+2)bird=null;}
     else{
       bird.peck=Math.max(0,bird.peck-dt);
-      const dx=bird.tx-bird.x;if(Math.abs(dx)>.05){bird.x+=Math.sign(dx)*Math.min(Math.abs(dx),dt*(bird.arrive?4.5:2.2));bird.hop+=dt*12;bird.dir=Math.sign(dx);}else if(bird.arrive){bird.arrive=false;bird.fly=false;}
+      const dx=bird.tx-bird.x;if(Math.abs(dx)>.05){bird.x+=Math.sign(dx)*Math.min(Math.abs(dx),dt*(bird.arrive?7:3.6));bird.hop+=dt*12;bird.dir=Math.sign(dx);}else if(bird.arrive){bird.arrive=false;bird.fly=false;}
       if(!bird.arrive)bird.peckT-=dt;
-      if(bird.peckT<=0){bird.peckT=2.6;
+      if(bird.peckT<=0){bird.peckT=1.3;
         const targets=G.worms.filter(w=>!w.dead&&((w.state==='surface'&&w.y<SKY+.3)||(w.state==='waitLift'&&w.liftFrom===-1)));
-        if(targets.length){targets.sort((a,b)=>Math.abs(a.x-bird.x)-Math.abs(b.x-bird.x));const w=targets[0];
-          if(Math.abs(w.x-bird.x)<1.2){bird.peck=.5;w.needs.terveys-=28;w.needs.ilo-=15;think(w,'😣',2);floats.push({x:w.x,y:w.y-.5,txt:'Auts!',t:1.4,col:'#c0392b'});
+        if(targets.length){targets.sort((a,b)=>Math.abs(a.x-bird.x)-Math.abs(b.x-bird.x));const w=targets.find(o=>o.id===bird.prey)||targets[0];bird.prey=w.id;
+          if(Math.abs(w.x-bird.x)<1.4){bird.peck=.5;w.needs.terveys-=40;w.needs.ilo-=15;think(w,'😵',1.2);if(w.state==='surface')w.stun=.9;floats.push({x:w.x,y:w.y-.5,txt:'Auts!',t:1.4,col:'#c0392b'});
             sfx('chirp',.5);if(w.needs.terveys<=0)killWorm(w,'rastas');else if(w.state==='surface'&&w.sphase!=='down')w.sphase='back';else if(w.state!=='waitLift'){if(w.state==='use'){const rm=roomById(w.room);if(rm)rm.use=Math.max(0,rm.use-1);}for(const kk of kitchens())if(kk.cook===w.id)kk.cook=0;w.state='idle';w.timer=0;w.path=[];w.intent=null;}}
-          else bird.tx=clamp(w.x,.5,COLS-.5);}
+          else{bird.tx=clamp(w.x,.5,COLS-.5);bird.peckT=.2;}}
         else bird.tx=CX-3+rnd()*7;}
     }
   }
