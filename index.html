@@ -914,7 +914,7 @@ function updateEvents(dt){
         if(!was&&broken(mrm)){toast(`💥 Myyrä rikkoi huoneen: ${ROOMS[mrm.type].name}! Korjaa se 🧱 Korjaa-työkalulla.`);floats.push({x:mrm.c+1,y:SKY+mrm.r+.3,txt:'💥 Rikki!',t:1.8,col:'#c0392b'});
           if(isKit(mrm.type)){mrm.leaves=Math.floor(mrm.leaves/2);mrm.food=Math.floor(mrm.food/2);mrm.cook=0;}}}}
     if(mole.leave&&(mole.x<-1.5||mole.x>COLS+1.5))mole=null;
-    else if(!mole.leave&&mole.hitT<=0){for(const w of G.worms){if(w.dead||w.state==='hide'||w.state==='ride'||w.state==='surface')continue;if(Math.hypot(w.x-mole.x,w.y-.28-mole.y)<.6){mole.hitT=1.6;w.needs.terveys-=22;w.needs.ilo-=15;think(w,'😣',2);floats.push({x:w.x,y:w.y-.5,txt:'Auts!',t:1.4,col:'#c0392b'});
+    else if(!mole.leave&&mole.hitT<=0){for(const w of G.worms){if(w.dead||w.state==='hide'||w.state==='ride'||w.state==='surface')continue;if(Math.hypot(w.x-mole.x,w.y-.28-mole.y)<.6){mole.hitT=1.6;w.needs.terveys-=34;w.needs.ilo-=15;think(w,'😣',2);floats.push({x:w.x,y:w.y-.5,txt:'Auts!',t:1.4,col:'#c0392b'});
       if(w.needs.terveys<=0){killWorm(w,'myyra');break;}
       if(w.state!=='waitLift'){if(w.state==='use'){const rm=roomById(w.room);if(rm)rm.use=Math.max(0,rm.use-1);}for(const kk of kitchens())if(kk.cook===w.id)kk.cook=0;w.state='idle';w.timer=0;w.path=[];w.intent=null;}break;}}}
     }
