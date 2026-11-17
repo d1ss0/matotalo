@@ -1831,7 +1831,7 @@ const TOOLS=[{id:'katso',ic:'👆',name:'Valitse'},{id:'pyydaLehti',ic:'🍃',na
 const TOOL_GROUPS=[['Työkalut',['katso','kaiva','tikkaat','paikkaa','purku']],['Pyydä madoilta',['pyydaLehti','pyydaKokki']],['Perusasiat',['ulos','keittio','makuu','kaivo','kylpy','komero','wc','lasten']],['Hyvinvointi ja turva',['laakari','olo','askartelu','takka','salainen','pelatin']],['Isot rakennukset 🔓',['hissi','suurkeittio','makuusali','suurvarasto']]];
 function buildTools(){
   const el=document.getElementById('tools');el.innerHTML='';
-  const seen=new Set(TOOL_GROUPS.flatMap(g=>g[1])),groups=[...TOOL_GROUPS,['Muut',TOOLS.map(t=>t.id).filter(id=>!seen.has(id))]];
+  const seen=new Set(TOOL_GROUPS.flatMap(g=>g[1])),groups=[...TOOL_GROUPS,['Muut',TOOLS.map(t=>t.id).filter(id=>!seen.has(id)&&id!=='kellari')]]; // vanhaa kellaria ei enää rakenneta, vanhat voi purkaa
   for(const [title,ids] of groups)for(const [i,id] of ids.entries()){const t=TOOLS.find(x=>x.id===id);if(!t)continue;
     if(i===0){const h=document.createElement('div');h.className='tgrp';h.innerHTML='<span>'+title+'</span>';el.appendChild(h);}
     const b=document.createElement('button');b.className='tool'+(t.id===tool?' sel':'');b.dataset.id=t.id;
